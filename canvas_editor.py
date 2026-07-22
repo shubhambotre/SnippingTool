@@ -211,12 +211,9 @@ class CanvasEditor(tk.Frame):
                     x1, y1, x2, y2 = action["coords"]
                     min_x, max_x = min(x1, x2), max(x1, x2)
                     min_y, max_y = min(y1, y2), max(y1, y2)
-                    if min_x - 10 <= self.start_x <= max_x + 10 and min_y - 10 <= self.start_y <= max_y + 10:
-                        if action.get("fill") == "filled":
-                            intersect = True
-                        else:
-                            if min(abs(self.start_x-x1), abs(self.start_x-x2), abs(self.start_y-y1), abs(self.start_y-y2)) < click_radius:
-                                intersect = True
+                    # Support clicking anywhere inside or near the bounding box to select it easily
+                    if min_x - click_radius <= self.start_x <= max_x + click_radius and min_y - click_radius <= self.start_y <= max_y + click_radius:
+                        intersect = True
                 elif t == "text":
                     x, y = action["coords"]
                     text_h = action["font_size"]
@@ -483,12 +480,9 @@ class CanvasEditor(tk.Frame):
                 x1, y1, x2, y2 = action["coords"]
                 min_x, max_x = min(x1, x2), max(x1, x2)
                 min_y, max_y = min(y1, y2), max(y1, y2)
-                if min_x - 10 <= cx <= max_x + 10 and min_y - 10 <= cy <= max_y + 10:
-                    if action.get("fill") == "filled":
-                        intersect = True
-                    else:
-                        if min(abs(cx-x1), abs(cx-x2), abs(cy-y1), abs(cy-y2)) < eraser_radius:
-                            intersect = True
+                # Support clicking anywhere inside or near the bounding box to erase it easily
+                if min_x - eraser_radius <= cx <= max_x + eraser_radius and min_y - eraser_radius <= cy <= max_y + eraser_radius:
+                    intersect = True
             elif t == "text":
                 x, y = action["coords"]
                 if math.sqrt((x-cx)**2 + (y-cy)**2) < 25:
