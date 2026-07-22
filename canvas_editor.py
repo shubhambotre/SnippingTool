@@ -57,10 +57,10 @@ class CanvasEditor(tk.Frame):
         self.history = []
         self.redo_stack = []
         
-        # Text select/move state
-        self.selected_text_index = None
-        self.drag_offset_x = 0
-        self.drag_offset_y = 0
+        # Select & Move state (supports text and all shapes)
+        self.selected_index = None
+        self.last_mouse_x = 0
+        self.last_mouse_y = 0
         
         # Drawing helpers
         self.start_x = None
@@ -81,13 +81,25 @@ class CanvasEditor(tk.Frame):
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
         self.canvas.bind("<Motion>", self.on_mouse_move)
         
+        # Keyboard nudge bindings (must have focus)
+        self.canvas.bind("<Left>", lambda e: self.nudge_selected(-1, 0))
+        self.canvas.bind("<Right>", lambda e: self.nudge_selected(1, 0))
+        self.canvas.bind("<Up>", lambda e: self.nudge_selected(0, -1))
+        self.canvas.bind("<Down>", lambda e: self.nudge_selected(0, 1))
+        
+        # Shift+Arrows nudge by 5px
+        self.canvas.bind("<Shift-Left>", lambda e: self.nudge_selected(-5, 0))
+        self.canvas.bind("<Shift-Right>", lambda e: self.nudge_selected(5, 0))
+        self.canvas.bind("<Shift-Up>", lambda e: self.nudge_selected(0, -5))
+        self.canvas.bind("<Shift-Down>", lambda e: self.nudge_selected(0, 5))
+        
         self.canvas.bind("<Configure>", lambda e: self.redraw())
 
     def set_image(self, pil_image):
         self.base_image = pil_image.convert("RGBA")
         self.history.clear()
         self.redo_stack.clear()
-        self.selected_text_index = None
+        self.selected_index = None
         self.redraw()
         
         w, h = self.base_image.size
@@ -95,7 +107,7 @@ class CanvasEditor(tk.Frame):
 
     def set_tool(self, tool):
         self.tool = tool
-        self.selected_text_index = None
+        self.selected_index = None
         self.redraw()
         
         if tool == "eraser":
@@ -123,7 +135,7 @@ class CanvasEditor(tk.Frame):
 
     def undo(self):
         if self.history:
-            self.selected_text_index = None
+            self.selected_index = None
             action = self.history.pop()
             self.redo_stack.append(action)
             self.redraw()
@@ -132,7 +144,7 @@ class CanvasEditor(tk.Frame):
 
     def redo(self):
         if self.redo_stack:
-            self.selected_text_index = None
+            self.selected_index = None
             action = self.redo_stack.pop()
             self.history.append(action)
             self.redraw()
@@ -141,7 +153,7 @@ class CanvasEditor(tk.Frame):
 
     def clear_annotations(self):
         if self.history:
-            self.selected_text_index = None
+            self.selected_index = None
             self.history.clear()
             self.redo_stack.clear()
             self.redraw()
@@ -165,20 +177,58 @@ class CanvasEditor(tk.Frame):
         self.start_x = int(self.canvas.canvasx(event.x))
         self.start_y = int(self.canvas.canvasy(event.y))
         
+        # Focus canvas so keypress events (Arrow keys) register
+        self.canvas.focus_set()
+        
         if self.tool == "select":
-            self.selected_text_index = None
+            self.selected_index = None
+            click_radius = 12
+            
             for idx in range(len(self.history) - 1, -1, -1):
                 action = self.history[idx]
-                if action["type"] == "text":
-                    ax, ay = action["coords"]
+                t = action["type"]
+                intersect = False
+                
+                if t in ("pencil", "highlighter"):
+                    for pt in action["points"]:
+                        if math.sqrt((pt[0]-self.start_x)**2 + (pt[1]-self.start_y)**2) < click_radius:
+                            intersect = True
+                            break
+                elif t in ("line", "arrow"):
+                    x1, y1, x2, y2 = action["coords"]
+                    min_x, max_x = min(x1, x2), max(x1, x2)
+                    min_y, max_y = min(y1, y2), max(y1, y2)
+                    if min_x - 10 <= self.start_x <= max_x + 10 and min_y - 10 <= self.start_y <= max_y + 10:
+                        dx, dy = x2 - x1, y2 - y1
+                        len_sq = dx*dx + dy*dy
+                        if len_sq > 0:
+                            proj = max(0, min(1, ((self.start_x - x1)*dx + (self.start_y - y1)*dy) / len_sq))
+                            px = x1 + proj * dx
+                            py = y1 + proj * dy
+                            if math.sqrt((self.start_x-px)**2 + (self.start_y-py)**2) < click_radius:
+                                intersect = True
+                elif t in ("rectangle", "circle"):
+                    x1, y1, x2, y2 = action["coords"]
+                    min_x, max_x = min(x1, x2), max(x1, x2)
+                    min_y, max_y = min(y1, y2), max(y1, y2)
+                    if min_x - 10 <= self.start_x <= max_x + 10 and min_y - 10 <= self.start_y <= max_y + 10:
+                        if action.get("fill") == "filled":
+                            intersect = True
+                        else:
+                            if min(abs(self.start_x-x1), abs(self.start_x-x2), abs(self.start_y-y1), abs(self.start_y-y2)) < click_radius:
+                                intersect = True
+                elif t == "text":
+                    x, y = action["coords"]
                     text_h = action["font_size"]
                     text_w = len(action["text"]) * (action["font_size"] * 0.6)
-                    
-                    if ax - 10 <= self.start_x <= ax + text_w + 10 and ay - 10 <= self.start_y <= ay + text_h + 10:
-                        self.selected_text_index = idx
-                        self.drag_offset_x = self.start_x - ax
-                        self.drag_offset_y = self.start_y - ay
-                        break
+                    if x - 10 <= self.start_x <= x + text_w + 10 and y - 10 <= self.start_y <= y + text_h + 10:
+                        intersect = True
+                        
+                if intersect:
+                    self.selected_index = idx
+                    self.last_mouse_x = self.start_x
+                    self.last_mouse_y = self.start_y
+                    break
             self.redraw()
             
         elif self.tool == "eraser":
@@ -221,15 +271,24 @@ class CanvasEditor(tk.Frame):
             self.cursor_callback(cx, cy)
             
         if self.tool == "select":
-            if self.selected_text_index is not None:
-                new_x = cx - self.drag_offset_x
-                new_y = cy - self.drag_offset_y
-                w_img, h_img = self.base_image.size
+            if self.selected_index is not None:
+                dx = cx - self.last_mouse_x
+                dy = cy - self.last_mouse_y
+                self.last_mouse_x = cx
+                self.last_mouse_y = cy
                 
-                new_x = max(0, min(new_x, w_img - 20))
-                new_y = max(0, min(new_y, h_img - 20))
-                
-                self.history[self.selected_text_index]["coords"] = (new_x, new_y)
+                # Apply translation to selected action
+                action = self.history[self.selected_index]
+                t = action["type"]
+                if t == "text":
+                    ax, ay = action["coords"]
+                    action["coords"] = (ax + dx, ay + dy)
+                elif t in ("pencil", "highlighter"):
+                    action["points"] = [(p[0] + dx, p[1] + dy) for p in action["points"]]
+                elif t in ("line", "arrow", "rectangle", "circle"):
+                    x1, y1, x2, y2 = action["coords"]
+                    action["coords"] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+                    
                 self.redraw()
                 
         elif self.tool == "eraser":
@@ -314,7 +373,7 @@ class CanvasEditor(tk.Frame):
         
         action = None
         if self.tool == "select":
-            if self.selected_text_index is not None:
+            if self.selected_index is not None:
                 if self.on_draw_callback:
                     self.on_draw_callback()
                     
@@ -334,7 +393,7 @@ class CanvasEditor(tk.Frame):
                 self.base_image = self.get_edited_image().crop((crop_x1, crop_y1, crop_x2, crop_y2))
                 self.history.clear()
                 self.redo_stack.clear()
-                self.selected_text_index = None
+                self.selected_index = None
                 self.redraw()
                 
                 self.canvas.config(scrollregion=(0, 0, self.base_image.width, self.base_image.height))
@@ -372,6 +431,26 @@ class CanvasEditor(tk.Frame):
                 
         self.start_x = None
         self.start_y = None
+
+    def nudge_selected(self, dx, dy):
+        """Keyboard shortcut handler to translate current selected action by dx, dy."""
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                t = action["type"]
+                
+                if t == "text":
+                    ax, ay = action["coords"]
+                    action["coords"] = (ax + dx, ay + dy)
+                elif t in ("pencil", "highlighter"):
+                    action["points"] = [(p[0] + dx, p[1] + dy) for p in action["points"]]
+                elif t in ("line", "arrow", "rectangle", "circle"):
+                    x1, y1, x2, y2 = action["coords"]
+                    action["coords"] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+                    
+                self.redraw()
+                if self.on_draw_callback:
+                    self.on_draw_callback()
 
     def erase_at(self, cx, cy):
         eraser_radius = 16
@@ -427,11 +506,9 @@ class CanvasEditor(tk.Frame):
 
     def create_text_input(self, x, y, prefill="", index=None):
         """Spawns text entry box. Prefills and inserts at index if modifying."""
-        # Cyan border outline for text frame
         entry_frame = tk.Frame(self.canvas, bg="#005FB8", bd=1)
         
         # FIXED: Always use black text (#0E1013) on white background (#FFFFFF) with explicit width=25
-        # This prevents light active colors (e.g. white, yellow, cyan) from drawing invisibly during input
         entry = tk.Entry(
             entry_frame, fg="#0E1013", bg="#FFFFFF",
             font=("Arial", self.font_size, "bold"), bd=0, width=25,
@@ -457,7 +534,7 @@ class CanvasEditor(tk.Frame):
                     "type": "text",
                     "coords": (x, y),
                     "text": text_str,
-                    "color": self.color, # Saved in the selected drawing color
+                    "color": self.color,
                     "font_size": self.font_size
                 }
                 if index is not None:
@@ -499,15 +576,30 @@ class CanvasEditor(tk.Frame):
             0, 0, anchor=tk.NW, image=self.bg_image_tk, tags="background"
         )
         
-        if self.tool == "select" and self.selected_text_index is not None:
-            if self.selected_text_index < len(self.history):
-                action = self.history[self.selected_text_index]
-                if action["type"] == "text":
+        # If select tool is active, draw dashed highlight box around currently selected shape or text
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                t = action["type"]
+                bx1, by1, bx2, by2 = None, None, None, None
+                
+                if t == "text":
                     ax, ay = action["coords"]
                     text_h = action["font_size"]
                     text_w = len(action["text"]) * (action["font_size"] * 0.6)
+                    bx1, by1, bx2, by2 = ax - 6, ay - 4, ax + text_w + 6, ay + text_h + 4
+                elif t in ("pencil", "highlighter"):
+                    pts = action["points"]
+                    xs = [pt[0] for pt in pts]
+                    ys = [pt[1] for pt in pts]
+                    bx1, by1, bx2, by2 = min(xs) - 4, min(ys) - 4, max(xs) + 4, max(ys) + 4
+                elif t in ("line", "arrow", "rectangle", "circle"):
+                    x1, y1, x2, y2 = action["coords"]
+                    bx1, by1, bx2, by2 = min(x1, x2) - 4, min(y1, y2) - 4, max(x1, x2) + 4, max(y1, y2) + 4
+                    
+                if bx1 is not None:
                     self.canvas.create_rectangle(
-                        ax - 6, ay - 4, ax + text_w + 6, ay + text_h + 4,
+                        bx1, by1, bx2, by2,
                         outline="#005FB8", width=1.5, dash=(4, 4), tags="selection_box"
                     )
 
