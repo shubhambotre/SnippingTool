@@ -56,7 +56,7 @@ def get_icon(name, color="#333333", size=(24, 24)):
         draw.line([(w-9, 9), (w-9, h-4)], fill=color, width=2)
         draw.line([(9, h-9), (w-4, h-9)], fill=color, width=2)
         
-    elif name == "pointer":
+    elif name in ("select", "pointer"):
         # Non-self-intersecting clean pointer cursor arrow
         draw.polygon([
             (4, 4), (4, 18), (8, 14), (12, 18), 
