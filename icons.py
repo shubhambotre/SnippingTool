@@ -63,6 +63,23 @@ def get_icon(name, color="#333333", size=(24, 24)):
             (14, 16), (10, 12), (15, 12)
         ], fill=color)
         
+    elif name == "zoom_in":
+        # Magnifying glass circle and handle
+        draw.ellipse([3, 3, w-9, h-9], outline=color, width=2)
+        draw.line([w-10, h-10, w-4, h-4], fill=color, width=3)
+        # Plus sign in center
+        cx, cy = (w-6)//2, (h-6)//2
+        draw.line([cx-4, cy, cx+4, cy], fill=color, width=2)
+        draw.line([cx, cy-4, cx, cy+4], fill=color, width=2)
+        
+    elif name == "zoom_out":
+        # Magnifying glass circle and handle
+        draw.ellipse([3, 3, w-9, h-9], outline=color, width=2)
+        draw.line([w-10, h-10, w-4, h-4], fill=color, width=3)
+        # Minus sign in center
+        cx, cy = (w-6)//2, (h-6)//2
+        draw.line([cx-4, cy, cx+4, cy], fill=color, width=2)
+        
     elif name == "undo":
         draw.arc([4, 6, w-4, h-4], 120, 310, fill=color, width=2)
         draw.polygon([(4, 11), (4, 4), (11, 7)], fill=color)

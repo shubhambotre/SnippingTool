@@ -52,6 +52,7 @@ class CanvasEditor(tk.Frame):
         self.thickness = 3
         self.fill_mode = "hollow"
         self.font_size = 14
+        self.zoom_factor = 1.0  # Dynamic zoom level
         
         # History
         self.history = []
@@ -75,7 +76,7 @@ class CanvasEditor(tk.Frame):
         self.on_crop_complete_callback = None
         self.on_tool_change_callback = None
         
-        # Bind events
+        # Bind mouse events
         self.canvas.bind("<ButtonPress-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
@@ -93,6 +94,14 @@ class CanvasEditor(tk.Frame):
         self.canvas.bind("<Shift-Up>", lambda e: self.nudge_selected(0, -5))
         self.canvas.bind("<Shift-Down>", lambda e: self.nudge_selected(0, 5))
         
+        # Keyboard scale size bindings (+ and - keys)
+        self.canvas.bind("<plus>", lambda e: self.scale_selected(1.1))
+        self.canvas.bind("<KP_Add>", lambda e: self.scale_selected(1.1))
+        self.canvas.bind("<equal>", lambda e: self.scale_selected(1.1))
+        
+        self.canvas.bind("<minus>", lambda e: self.scale_selected(0.9))
+        self.canvas.bind("<KP_Subtract>", lambda e: self.scale_selected(0.9))
+        
         self.canvas.bind("<Configure>", lambda e: self.redraw())
 
     def set_image(self, pil_image):
@@ -100,10 +109,9 @@ class CanvasEditor(tk.Frame):
         self.history.clear()
         self.redo_stack.clear()
         self.selected_index = None
+        self.zoom_factor = 1.0  # Reset zoom on new capture
         self.redraw()
-        
-        w, h = self.base_image.size
-        self.canvas.config(scrollregion=(0, 0, w, h))
+        self.update_scrollregion()
 
     def set_tool(self, tool):
         self.tool = tool
@@ -123,15 +131,75 @@ class CanvasEditor(tk.Frame):
 
     def set_color(self, color):
         self.color = color
+        # Dynamic modification for selected element
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                self.history[self.selected_index]["color"] = color
+                self.redraw()
+                if self.on_draw_callback:
+                    self.on_draw_callback()
 
     def set_thickness(self, thickness):
         self.thickness = thickness
+        # Dynamic modification for selected element
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                if "thickness" in action:
+                    action["thickness"] = thickness
+                    self.redraw()
+                    if self.on_draw_callback:
+                        self.on_draw_callback()
 
     def set_fill_mode(self, mode):
         self.fill_mode = mode
+        # Dynamic modification for selected element
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                if "fill" in action:
+                    action["fill"] = mode
+                    self.redraw()
+                    if self.on_draw_callback:
+                        self.on_draw_callback()
 
     def set_font_size(self, size):
         self.font_size = size
+        # Dynamic modification for selected element
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                if "font_size" in action:
+                    action["font_size"] = size
+                    self.redraw()
+                    if self.on_draw_callback:
+                        self.on_draw_callback()
+
+    def zoom_in(self):
+        presets = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]
+        higher = [p for p in presets if p > self.zoom_factor]
+        if higher:
+            self.zoom_factor = higher[0]
+            self.redraw()
+            self.update_scrollregion()
+            if self.on_draw_callback:
+                self.on_draw_callback()
+            
+    def zoom_out(self):
+        presets = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]
+        lower = [p for p in presets if p < self.zoom_factor]
+        if lower:
+            self.zoom_factor = lower[-1]
+            self.redraw()
+            self.update_scrollregion()
+            if self.on_draw_callback:
+                self.on_draw_callback()
+                
+    def update_scrollregion(self):
+        if self.base_image:
+            w = int(self.base_image.width * self.zoom_factor)
+            h = int(self.base_image.height * self.zoom_factor)
+            self.canvas.config(scrollregion=(0, 0, w, h))
 
     def undo(self):
         if self.history:
@@ -162,8 +230,9 @@ class CanvasEditor(tk.Frame):
 
     def on_mouse_move(self, event):
         if self.cursor_callback:
-            cx = int(self.canvas.canvasx(event.x))
-            cy = int(self.canvas.canvasy(event.y))
+            # Divide by zoom factor to convert mouse coords to base image coordinates
+            cx = int(self.canvas.canvasx(event.x) / self.zoom_factor)
+            cy = int(self.canvas.canvasy(event.y) / self.zoom_factor)
             if self.base_image:
                 w, h = self.base_image.size
                 cx = max(0, min(cx, w - 1))
@@ -174,10 +243,11 @@ class CanvasEditor(tk.Frame):
         if not self.base_image:
             return
             
-        self.start_x = int(self.canvas.canvasx(event.x))
-        self.start_y = int(self.canvas.canvasy(event.y))
+        # Convert coords to base image coordinates
+        self.start_x = int(self.canvas.canvasx(event.x) / self.zoom_factor)
+        self.start_y = int(self.canvas.canvasy(event.y) / self.zoom_factor)
         
-        # Focus canvas so keypress events (Arrow keys) register
+        # Focus canvas so keypress events register
         self.canvas.focus_set()
         
         if self.tool == "select":
@@ -211,7 +281,6 @@ class CanvasEditor(tk.Frame):
                     x1, y1, x2, y2 = action["coords"]
                     min_x, max_x = min(x1, x2), max(x1, x2)
                     min_y, max_y = min(y1, y2), max(y1, y2)
-                    # Support clicking anywhere inside or near the bounding box to select it easily
                     if min_x - click_radius <= self.start_x <= max_x + click_radius and min_y - click_radius <= self.start_y <= max_y + click_radius:
                         intersect = True
                 elif t == "text":
@@ -261,8 +330,8 @@ class CanvasEditor(tk.Frame):
         if self.start_x is None or self.start_y is None:
             return
             
-        cx = int(self.canvas.canvasx(event.x))
-        cy = int(self.canvas.canvasy(event.y))
+        cx = int(self.canvas.canvasx(event.x) / self.zoom_factor)
+        cy = int(self.canvas.canvasy(event.y) / self.zoom_factor)
         
         if self.cursor_callback:
             self.cursor_callback(cx, cy)
@@ -297,8 +366,9 @@ class CanvasEditor(tk.Frame):
             
             x_prev, y_prev = self.pencil_points[-1]
             seg_id = self.canvas.create_line(
-                x_prev, y_prev, cx, cy,
-                fill=color, width=thickness,
+                x_prev * self.zoom_factor, y_prev * self.zoom_factor, 
+                cx * self.zoom_factor, cy * self.zoom_factor,
+                fill=color, width=int(round(thickness * self.zoom_factor)),
                 capstyle=tk.ROUND, joinstyle=tk.ROUND,
                 tags="preview"
             )
@@ -309,8 +379,9 @@ class CanvasEditor(tk.Frame):
             if self.preview_id:
                 self.canvas.delete(self.preview_id)
             self.preview_id = self.canvas.create_line(
-                self.start_x, self.start_y, cx, cy,
-                fill=self.color, width=self.thickness,
+                self.start_x * self.zoom_factor, self.start_y * self.zoom_factor, 
+                cx * self.zoom_factor, cy * self.zoom_factor,
+                fill=self.color, width=int(round(self.thickness * self.zoom_factor)),
                 tags="preview"
             )
             
@@ -318,9 +389,10 @@ class CanvasEditor(tk.Frame):
             if self.preview_id:
                 self.canvas.delete(self.preview_id)
             self.preview_id = self.canvas.create_line(
-                self.start_x, self.start_y, cx, cy,
-                fill=self.color, width=self.thickness,
-                arrow=tk.LAST, arrowshape=(12, 14, 4),
+                self.start_x * self.zoom_factor, self.start_y * self.zoom_factor, 
+                cx * self.zoom_factor, cy * self.zoom_factor,
+                fill=self.color, width=int(round(self.thickness * self.zoom_factor)),
+                arrow=tk.LAST, arrowshape=(12 * self.zoom_factor, 14 * self.zoom_factor, 4 * self.zoom_factor),
                 tags="preview"
             )
             
@@ -329,8 +401,9 @@ class CanvasEditor(tk.Frame):
                 self.canvas.delete(self.preview_id)
             fill_col = self.color if self.fill_mode == "filled" else ""
             self.preview_id = self.canvas.create_rectangle(
-                self.start_x, self.start_y, cx, cy,
-                outline=self.color, width=self.thickness,
+                self.start_x * self.zoom_factor, self.start_y * self.zoom_factor, 
+                cx * self.zoom_factor, cy * self.zoom_factor,
+                outline=self.color, width=int(round(self.thickness * self.zoom_factor)),
                 fill=fill_col, tags="preview"
             )
             
@@ -339,8 +412,9 @@ class CanvasEditor(tk.Frame):
                 self.canvas.delete(self.preview_id)
             fill_col = self.color if self.fill_mode == "filled" else ""
             self.preview_id = self.canvas.create_oval(
-                self.start_x, self.start_y, cx, cy,
-                outline=self.color, width=self.thickness,
+                self.start_x * self.zoom_factor, self.start_y * self.zoom_factor, 
+                cx * self.zoom_factor, cy * self.zoom_factor,
+                outline=self.color, width=int(round(self.thickness * self.zoom_factor)),
                 fill=fill_col, tags="preview"
             )
             
@@ -348,7 +422,8 @@ class CanvasEditor(tk.Frame):
             if self.preview_id:
                 self.canvas.delete(self.preview_id)
             self.preview_id = self.canvas.create_rectangle(
-                self.start_x, self.start_y, cx, cy,
+                self.start_x * self.zoom_factor, self.start_y * self.zoom_factor, 
+                cx * self.zoom_factor, cy * self.zoom_factor,
                 outline="#005FB8", width=2, dash=(6, 4), tags="preview"
             )
 
@@ -356,8 +431,8 @@ class CanvasEditor(tk.Frame):
         if self.start_x is None or self.start_y is None:
             return
             
-        cx = int(self.canvas.canvasx(event.x))
-        cy = int(self.canvas.canvasy(event.y))
+        cx = int(self.canvas.canvasx(event.x) / self.zoom_factor)
+        cy = int(self.canvas.canvasy(event.y) / self.zoom_factor)
         
         # Delete previews
         if self.preview_id:
@@ -391,6 +466,7 @@ class CanvasEditor(tk.Frame):
                 self.history.clear()
                 self.redo_stack.clear()
                 self.selected_index = None
+                self.zoom_factor = 1.0
                 self.redraw()
                 
                 self.canvas.config(scrollregion=(0, 0, self.base_image.width, self.base_image.height))
@@ -449,6 +525,44 @@ class CanvasEditor(tk.Frame):
                 if self.on_draw_callback:
                     self.on_draw_callback()
 
+    def scale_selected(self, factor):
+        """Keyboard shortcut handler to scale the physical size of selected shape or text annotations."""
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                t = action["type"]
+                
+                if t == "text":
+                    # Text: scale the font size
+                    new_fs = max(6, min(120, int(round(action["font_size"] * factor))))
+                    action["font_size"] = new_fs
+                elif t in ("pencil", "highlighter"):
+                    # Scribbles: scale all points relative to their centroid
+                    pts = action["points"]
+                    xs = [p[0] for p in pts]
+                    ys = [p[1] for p in pts]
+                    cx = sum(xs) / len(xs)
+                    cy = sum(ys) / len(ys)
+                    action["points"] = [
+                        (cx + (p[0] - cx) * factor, cy + (p[1] - cy) * factor)
+                        for p in pts
+                    ]
+                elif t in ("line", "arrow", "rectangle", "circle"):
+                    # Vector shapes: scale endpoints relative to their bounding box center
+                    x1, y1, x2, y2 = action["coords"]
+                    cx = (x1 + x2) / 2
+                    cy = (y1 + y2) / 2
+                    action["coords"] = (
+                        cx + (x1 - cx) * factor,
+                        cy + (y1 - cy) * factor,
+                        cx + (x2 - cx) * factor,
+                        cy + (y2 - cy) * factor
+                    )
+                    
+                self.redraw()
+                if self.on_draw_callback:
+                    self.on_draw_callback()
+
     def erase_at(self, cx, cy):
         eraser_radius = 16
         modified = False
@@ -480,7 +594,6 @@ class CanvasEditor(tk.Frame):
                 x1, y1, x2, y2 = action["coords"]
                 min_x, max_x = min(x1, x2), max(x1, x2)
                 min_y, max_y = min(y1, y2), max(y1, y2)
-                # Support clicking anywhere inside or near the bounding box to erase it easily
                 if min_x - eraser_radius <= cx <= max_x + eraser_radius and min_y - eraser_radius <= cy <= max_y + eraser_radius:
                     intersect = True
             elif t == "text":
@@ -502,10 +615,11 @@ class CanvasEditor(tk.Frame):
         """Spawns text entry box. Prefills and inserts at index if modifying."""
         entry_frame = tk.Frame(self.canvas, bg="#005FB8", bd=1)
         
-        # FIXED: Always use black text (#0E1013) on white background (#FFFFFF) with explicit width=25
+        # Scale input font size to match canvas zoom levels dynamically
+        scaled_font_size = int(round(self.font_size * self.zoom_factor))
         entry = tk.Entry(
             entry_frame, fg="#0E1013", bg="#FFFFFF",
-            font=("Arial", self.font_size, "bold"), bd=0, width=25,
+            font=("Arial", scaled_font_size, "bold"), bd=0, width=25,
             highlightthickness=0, insertbackground="#005FB8",
             selectbackground="#E5E5E5", selectforeground="#0E1013"
         )
@@ -515,7 +629,7 @@ class CanvasEditor(tk.Frame):
             entry.insert(0, prefill)
             entry.select_range(0, tk.END)
             
-        canvas_window_id = self.canvas.create_window(x, y, anchor=tk.NW, window=entry_frame)
+        canvas_window_id = self.canvas.create_window(x * self.zoom_factor, y * self.zoom_factor, anchor=tk.NW, window=entry_frame)
         entry.focus_set()
         
         def save_text(event=None):
@@ -564,13 +678,23 @@ class CanvasEditor(tk.Frame):
             )
             return
             
-        self.current_display_image = self.get_edited_image()
+        # Draw base + vector annotations
+        base_rendered = self.get_edited_image()
+        
+        # Apply dynamic canvas zoom scaling using fast high-quality Bilinear interpolation
+        if self.zoom_factor != 1.0:
+            new_w = int(base_rendered.width * self.zoom_factor)
+            new_h = int(base_rendered.height * self.zoom_factor)
+            self.current_display_image = base_rendered.resize((new_w, new_h), Image.Resampling.BILINEAR)
+        else:
+            self.current_display_image = base_rendered
+            
         self.bg_image_tk = ImageTk.PhotoImage(self.current_display_image)
         self.bg_image_id = self.canvas.create_image(
             0, 0, anchor=tk.NW, image=self.bg_image_tk, tags="background"
         )
         
-        # If select tool is active, draw dashed highlight box around currently selected shape or text
+        # If select tool is active, draw scaled dashed highlight box around currently selected shape or text
         if self.tool == "select" and self.selected_index is not None:
             if self.selected_index < len(self.history):
                 action = self.history[self.selected_index]
@@ -592,8 +716,10 @@ class CanvasEditor(tk.Frame):
                     bx1, by1, bx2, by2 = min(x1, x2) - 4, min(y1, y2) - 4, max(x1, x2) + 4, max(y1, y2) + 4
                     
                 if bx1 is not None:
+                    # Scale selection borders to match zoom factor
                     self.canvas.create_rectangle(
-                        bx1, by1, bx2, by2,
+                        bx1 * self.zoom_factor, by1 * self.zoom_factor, 
+                        bx2 * self.zoom_factor, by2 * self.zoom_factor,
                         outline="#005FB8", width=1.5, dash=(4, 4), tags="selection_box"
                     )
 

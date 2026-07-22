@@ -329,6 +329,17 @@ class SnippingToolApp:
         div5.pack(side=tk.RIGHT, fill=tk.Y, padx=4, pady=6)
         div5.is_divider = True
         
+        # Zoom Controls
+        self.btn_zoom_in = self.make_icon_button(self.right_grp, "zoom_in", self.zoom_in)
+        self.btn_zoom_in.pack(side=tk.RIGHT, padx=1, pady=5)
+        
+        self.btn_zoom_out = self.make_icon_button(self.right_grp, "zoom_out", self.zoom_out)
+        self.btn_zoom_out.pack(side=tk.RIGHT, padx=1, pady=5)
+        
+        div_z = tk.Frame(self.right_grp, bg=self.border_color, width=1)
+        div_z.pack(side=tk.RIGHT, fill=tk.Y, padx=4, pady=6)
+        div_z.is_divider = True
+        
         self.btn_redo = self.make_icon_button(self.right_grp, "redo", self.redo)
         self.btn_redo.pack(side=tk.RIGHT, padx=1, pady=5)
         
@@ -354,6 +365,9 @@ class SnippingToolApp:
         
         self.lbl_status_tool = tk.Label(self.status_bar, text="TOOL: PENCIL", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
         self.lbl_status_tool.pack(side=tk.LEFT, padx=15, pady=3)
+        
+        self.lbl_status_zoom = tk.Label(self.status_bar, text="ZOOM: 100%", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
+        self.lbl_status_zoom.pack(side=tk.LEFT, padx=20, pady=3)
         
         self.lbl_status_dims = tk.Label(self.status_bar, text="RESOLUTION: 0 x 0 PX", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
         self.lbl_status_dims.pack(side=tk.LEFT, padx=20, pady=3)
@@ -388,7 +402,6 @@ class SnippingToolApp:
         """Refreshes all toolbar icons to match Light/Dark high contrast specifications."""
         icon_col = "#333333" if self.theme_name == "light" else "#DDDDDD"
         
-        # Camera icon remains white inside Cobalt New button
         self.icon_camera = get_icon("camera", "#FFFFFF", size=(16, 16))
         self.btn_new.config(image=self.icon_camera)
         
@@ -398,6 +411,8 @@ class SnippingToolApp:
             (self.btn_save_as, "save"),
             (self.btn_copy, "copy"),
             (self.btn_clear, "clear"),
+            (self.btn_zoom_in, "zoom_in"),
+            (self.btn_zoom_out, "zoom_out"),
             (self.btn_redo, "redo"),
             (self.btn_undo, "undo")
         ]:
@@ -447,7 +462,7 @@ class SnippingToolApp:
         
         # Interactive status guides
         if tool_name == "select":
-            self.lbl_status_tool.config(text="TOOL: SELECT (CLICK & DRAG ELEMENTS TO MOVE / USE ARROW KEYS)")
+            self.lbl_status_tool.config(text="TOOL: SELECT (CLICK & DRAG ELEMENTS TO MOVE / USE ARROW KEYS OR + / - KEY)")
         elif tool_name == "text":
             self.lbl_status_tool.config(text="TOOL: TEXT (CLICK CANVAS TO TYPE / CLICK TEXT TO EDIT)")
         elif tool_name == "crop":
@@ -493,6 +508,14 @@ class SnippingToolApp:
         self.font_size_var.set(new_size)
         self.on_style_changed()
 
+    def zoom_in(self):
+        self.canvas_editor.zoom_in()
+        self.update_actions_buttons_state()
+
+    def zoom_out(self):
+        self.canvas_editor.zoom_out()
+        self.update_actions_buttons_state()
+
     def start_capture(self):
         mode = self.mode_var.get()
         w, h = 800, 600
@@ -524,6 +547,7 @@ class SnippingToolApp:
 
     def on_crop_complete(self, w, h):
         self.lbl_status_dims.config(text=f"RESOLUTION: {w} x {h} PX")
+        self.lbl_status_zoom.config(text=f"ZOOM: {int(round(self.canvas_editor.zoom_factor * 100))}%")
         win_w = max(820, w + 30)
         win_h = h + 115
         self.root.geometry(f"{win_w}x{win_h}")
@@ -546,6 +570,7 @@ class SnippingToolApp:
         
         self.root.geometry("820x72")
         self.lbl_status_dims.config(text="RESOLUTION: 0 x 0 PX")
+        self.lbl_status_zoom.config(text="ZOOM: 100%")
         self.update_toolbar_state()
         self.update_actions_buttons_state()
 
@@ -557,6 +582,8 @@ class SnippingToolApp:
             self.btn_clear.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_undo.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_redo.pack(side=tk.RIGHT, padx=1, pady=5)
+            self.btn_zoom_in.pack(side=tk.RIGHT, padx=1, pady=5)
+            self.btn_zoom_out.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_copy.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_save_as.pack(side=tk.RIGHT, padx=1, pady=5)
         else:
@@ -564,6 +591,8 @@ class SnippingToolApp:
             self.btn_clear.pack_forget()
             self.btn_undo.pack_forget()
             self.btn_redo.pack_forget()
+            self.btn_zoom_in.pack_forget()
+            self.btn_zoom_out.pack_forget()
             self.btn_copy.pack_forget()
             self.btn_save_as.pack_forget()
 
@@ -574,6 +603,7 @@ class SnippingToolApp:
         self.btn_undo.config(state="normal" if has_history else "disabled")
         self.btn_redo.config(state="normal" if has_redo else "disabled")
         self.btn_clear.config(state="normal" if self.canvas_editor.base_image else "disabled")
+        self.lbl_status_zoom.config(text=f"ZOOM: {int(round(self.canvas_editor.zoom_factor * 100))}%")
 
     def update_coordinates_status(self, x, y):
         self.lbl_status_coords.config(text=f"COORDS: {x:04d}, {y:04d}")
@@ -789,7 +819,6 @@ class SnippingToolApp:
             self.config.set("default_format", f)
             self.config.set("theme", t)
             
-            # Apply changes dynamically in real-time
             self.apply_theme_colors()
             self.canvas_editor.redraw()
             
