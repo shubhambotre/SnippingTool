@@ -57,10 +57,10 @@ def get_icon(name, color="#333333", size=(24, 24)):
         draw.line([(9, h-9), (w-4, h-9)], fill=color, width=2)
         
     elif name == "pointer":
-        # Classic mouse pointer cursor arrow pointing top-left
+        # Non-self-intersecting clean pointer cursor arrow
         draw.polygon([
-            (4, 4), (4, 18), (8, 15), (11, 20), 
-            (13, 19), (10, 14), (15, 14)
+            (4, 4), (4, 18), (8, 14), (12, 18), 
+            (14, 16), (10, 12), (15, 12)
         ], fill=color)
         
     elif name == "undo":

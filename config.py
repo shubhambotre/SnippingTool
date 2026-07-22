@@ -14,7 +14,8 @@ DEFAULT_SETTINGS = {
     "default_format": "PNG",
     "default_capture_mode": "free",
     "fixed_width": 800,
-    "fixed_height": 600
+    "fixed_height": 600,
+    "theme": "light"
 }
 
 class AppConfig:
