@@ -102,6 +102,11 @@ class CanvasEditor(tk.Frame):
         self.canvas.bind("<minus>", lambda e: self.scale_selected(0.9))
         self.canvas.bind("<KP_Subtract>", lambda e: self.scale_selected(0.9))
         
+        # Bind Mouse Scroll Wheel (Windows/macOS & Linux bindings)
+        self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.canvas.bind("<Button-4>", self.on_linux_scroll_up)
+        self.canvas.bind("<Button-5>", self.on_linux_scroll_down)
+        
         self.canvas.bind("<Configure>", lambda e: self.redraw())
 
     def set_image(self, pil_image):
@@ -230,7 +235,6 @@ class CanvasEditor(tk.Frame):
 
     def on_mouse_move(self, event):
         if self.cursor_callback:
-            # Divide by zoom factor to convert mouse coords to base image coordinates
             cx = int(self.canvas.canvasx(event.x) / self.zoom_factor)
             cy = int(self.canvas.canvasy(event.y) / self.zoom_factor)
             if self.base_image:
@@ -243,7 +247,6 @@ class CanvasEditor(tk.Frame):
         if not self.base_image:
             return
             
-        # Convert coords to base image coordinates
         self.start_x = int(self.canvas.canvasx(event.x) / self.zoom_factor)
         self.start_y = int(self.canvas.canvasy(event.y) / self.zoom_factor)
         
@@ -533,11 +536,9 @@ class CanvasEditor(tk.Frame):
                 t = action["type"]
                 
                 if t == "text":
-                    # Text: scale the font size
                     new_fs = max(6, min(120, int(round(action["font_size"] * factor))))
                     action["font_size"] = new_fs
                 elif t in ("pencil", "highlighter"):
-                    # Scribbles: scale all points relative to their centroid
                     pts = action["points"]
                     xs = [p[0] for p in pts]
                     ys = [p[1] for p in pts]
@@ -548,7 +549,6 @@ class CanvasEditor(tk.Frame):
                         for p in pts
                     ]
                 elif t in ("line", "arrow", "rectangle", "circle"):
-                    # Vector shapes: scale endpoints relative to their bounding box center
                     x1, y1, x2, y2 = action["coords"]
                     cx = (x1 + x2) / 2
                     cy = (y1 + y2) / 2
@@ -562,6 +562,47 @@ class CanvasEditor(tk.Frame):
                 self.redraw()
                 if self.on_draw_callback:
                     self.on_draw_callback()
+
+    def on_mouse_wheel(self, event):
+        """Mouse Scroll Wheel handler. Scales the selected element, or zooms canvas if Ctrl is held."""
+        # Check if Ctrl key is held down (mask is 0x0004)
+        ctrl_held = (event.state & 0x0004) != 0
+        
+        if ctrl_held:
+            # Control + Scroll = Canvas Zoom
+            if event.delta > 0:
+                self.zoom_in()
+            else:
+                self.zoom_out()
+            return "break"  # Consume event to prevent canvas scrolling
+            
+        if self.tool == "select" and self.selected_index is not None:
+            # Scroll up = Scale Larger, Scroll down = Scale Smaller
+            if event.delta > 0:
+                self.scale_selected(1.1)
+            else:
+                self.scale_selected(0.9)
+            return "break"  # Consume event to prevent canvas scrolling
+
+    def on_linux_scroll_up(self, event):
+        """Linux-specific scroll up handler."""
+        ctrl_held = (event.state & 0x0004) != 0
+        if ctrl_held:
+            self.zoom_in()
+            return "break"
+        if self.tool == "select" and self.selected_index is not None:
+            self.scale_selected(1.1)
+            return "break"
+
+    def on_linux_scroll_down(self, event):
+        """Linux-specific scroll down handler."""
+        ctrl_held = (event.state & 0x0004) != 0
+        if ctrl_held:
+            self.zoom_out()
+            return "break"
+        if self.tool == "select" and self.selected_index is not None:
+            self.scale_selected(0.9)
+            return "break"
 
     def erase_at(self, cx, cy):
         eraser_radius = 16
