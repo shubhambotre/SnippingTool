@@ -4,15 +4,25 @@ import math
 import os
 from PIL import Image, ImageDraw, ImageTk, ImageFont
 
-def get_pillow_font(size):
-    """Loads Arial Bold font from Windows or returns default."""
-    font_paths = [
-        "C:\\Windows\\Fonts\\arialbd.ttf", # Arial Bold
-        "C:\\Windows\\Fonts\\arial.ttf",   # Arial Regular
-        "C:\\Windows\\Fonts\\segoeuib.ttf",
-        "C:\\Windows\\Fonts\\segoeui.ttf"
-    ]
-    for path in font_paths:
+def get_pillow_font(family, size=None):
+    """Loads the requested font family and size from Windows Fonts, or falls back to Arial Bold."""
+    if size is None:
+        size = family
+        family = "Arial"
+        
+    font_map = {
+        "Arial": ["arialbd.ttf", "arial.ttf"],
+        "Times New Roman": ["timesbd.ttf", "times.ttf"],
+        "Courier New": ["courbd.ttf", "cour.ttf"],
+        "Georgia": ["georgiab.ttf", "georgia.ttf"],
+        "Segoe UI": ["segoeuib.ttf", "segoeui.ttf"],
+        "Verdana": ["verdanab.ttf", "verdana.ttf"],
+        "Impact": ["impact.ttf"]
+    }
+    
+    filenames = font_map.get(family, ["arialbd.ttf", "arial.ttf"])
+    for fname in filenames:
+        path = os.path.join("C:\\Windows\\Fonts", fname)
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
@@ -52,6 +62,7 @@ class CanvasEditor(tk.Frame):
         self.thickness = 3
         self.fill_mode = "hollow"
         self.font_size = 14
+        self.font_family = "Arial"
         self.zoom_factor = 1.0  # Dynamic zoom level
         
         # History
@@ -176,6 +187,18 @@ class CanvasEditor(tk.Frame):
                 action = self.history[self.selected_index]
                 if "font_size" in action:
                     action["font_size"] = size
+                    self.redraw()
+                    if self.on_draw_callback:
+                        self.on_draw_callback()
+
+    def set_font_family(self, family):
+        self.font_family = family
+        # Dynamic modification for selected element
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                if action["type"] == "text":
+                    action["font_family"] = family
                     self.redraw()
                     if self.on_draw_callback:
                         self.on_draw_callback()
@@ -658,9 +681,13 @@ class CanvasEditor(tk.Frame):
         
         # Scale input font size to match canvas zoom levels dynamically
         scaled_font_size = int(round(self.font_size * self.zoom_factor))
+        entry_family = self.font_family
+        if index is not None and index < len(self.history):
+            entry_family = self.history[index].get("font_family", self.font_family)
+            
         entry = tk.Entry(
             entry_frame, fg="#0E1013", bg="#FFFFFF",
-            font=("Arial", scaled_font_size, "bold"), bd=0, width=25,
+            font=(entry_family, scaled_font_size, "bold"), bd=0, width=25,
             highlightthickness=0, insertbackground="#005FB8",
             selectbackground="#E5E5E5", selectforeground="#0E1013"
         )
@@ -684,7 +711,8 @@ class CanvasEditor(tk.Frame):
                     "coords": (x, y),
                     "text": text_str,
                     "color": self.color,
-                    "font_size": self.font_size
+                    "font_size": self.font_size,
+                    "font_family": self.font_family
                 }
                 if index is not None:
                     self.history.insert(index, action)
@@ -818,7 +846,8 @@ class CanvasEditor(tk.Frame):
                 draw.ellipse([rx1, ry1, rx2, ry2], outline=action["color"], width=action["thickness"], fill=fill_col)
             elif t == "text":
                 x, y = action["coords"]
-                p_font = get_pillow_font(action["font_size"])
+                f_family = action.get("font_family", "Arial")
+                p_font = get_pillow_font(f_family, action["font_size"])
                 draw.text((x, y), action["text"], fill=action["color"], font=p_font)
                 
         return edited

@@ -30,8 +30,8 @@ class SnippingToolApp:
         self.root = root
         self.root.title("Snipping Tool")
         
-        # Start compact horizontal launcher pill - expanded to 820px to fit tools neatly
-        self.root.geometry("820x72")
+        # Start compact horizontal launcher pill - expanded to 900px to fit tools neatly
+        self.root.geometry("900x72")
         self.root.resizable(True, True)
         
         # Load configuration settings
@@ -259,6 +259,12 @@ class SnippingToolApp:
         self.cb_fill.pack(side=tk.LEFT, padx=2, pady=8)
         self.cb_fill.bind("<<ComboboxSelected>>", lambda e: self.on_style_changed())
         
+        # Font family dropdown selector
+        self.font_family_var = tk.StringVar(value=self.config.get("last_font_family") or "Arial")
+        self.cb_font_family = ttk.Combobox(self.mid_grp, textvariable=self.font_family_var, values=["Arial", "Times New Roman", "Courier New", "Georgia", "Segoe UI", "Verdana", "Impact"], width=12, state="readonly")
+        self.cb_font_family.pack(side=tk.LEFT, padx=3, pady=8)
+        self.cb_font_family.bind("<<ComboboxSelected>>", lambda e: self.on_style_changed())
+        
         # Text size controls (A- / A+ buttons) & dropdown
         self.btn_font_dec = tk.Button(
             self.mid_grp, text="A-", command=self.font_size_decrease, bg=self.panel_bg,
@@ -432,6 +438,7 @@ class SnippingToolApp:
         self.canvas_editor.set_thickness(self.thickness_var.get())
         self.canvas_editor.set_fill_mode(self.fill_var.get())
         self.canvas_editor.set_font_size(self.font_size_var.get())
+        self.canvas_editor.set_font_family(self.font_family_var.get())
 
     def on_capture_mode_changed(self, event=None):
         mode = self.mode_var.get()
@@ -451,10 +458,12 @@ class SnippingToolApp:
         self.config.set("last_thickness", self.thickness_var.get())
         self.config.set("last_fill_mode", self.fill_var.get())
         self.config.set("last_font_size", self.font_size_var.get())
+        self.config.set("last_font_family", self.font_family_var.get())
         
         self.canvas_editor.set_thickness(self.thickness_var.get())
         self.canvas_editor.set_fill_mode(self.fill_var.get())
         self.canvas_editor.set_font_size(self.font_size_var.get())
+        self.canvas_editor.set_font_family(self.font_family_var.get())
 
     def set_tool(self, tool_name):
         self.config.set("last_tool", tool_name)
@@ -548,7 +557,7 @@ class SnippingToolApp:
     def on_crop_complete(self, w, h):
         self.lbl_status_dims.config(text=f"RESOLUTION: {w} x {h} PX")
         self.lbl_status_zoom.config(text=f"ZOOM: {int(round(self.canvas_editor.zoom_factor * 100))}%")
-        win_w = max(820, w + 30)
+        win_w = max(900, w + 30)
         win_h = h + 115
         self.root.geometry(f"{win_w}x{win_h}")
 
@@ -568,7 +577,7 @@ class SnippingToolApp:
         self.canvas_editor.redo_stack.clear()
         self.canvas_editor.redraw()
         
-        self.root.geometry("820x72")
+        self.root.geometry("900x72")
         self.lbl_status_dims.config(text="RESOLUTION: 0 x 0 PX")
         self.lbl_status_zoom.config(text="ZOOM: 100%")
         self.update_toolbar_state()

@@ -9,6 +9,7 @@ DEFAULT_SETTINGS = {
     "last_thickness": 3,
     "last_fill_mode": "hollow",
     "last_font_size": 14,
+    "last_font_family": "Arial",
     "default_save_path": os.path.join(os.path.expanduser("~"), "Pictures"),
     "naming_pattern": "Capture_{datetime}",
     "default_format": "PNG",
