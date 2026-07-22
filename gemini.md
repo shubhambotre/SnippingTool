@@ -7,7 +7,7 @@ A streamlined, modern alternative to the standard snipping tool, built entirely 
 ## 🎨 Key Features
 
 1. **Light & Dark Theme Switcher**:
-   - Easily toggle between **Light Mode** (white interface) and **Dark Mode** (charcoal dark interface) inside the Preferences Settings.
+   - Toggle between **Light Mode** (white interface) and **Dark Mode** (charcoal dark interface) inside the Preferences Settings.
    - Dynamic real-time styling cascades to all buttons, scrollbars, frames, inputs, and background panels.
    - High-contrast vector icons adjust automatically (dark charcoal `#333333` in Light Mode vs light silver-grey `#DDDDDD` in Dark Mode).
 
@@ -17,37 +17,49 @@ A streamlined, modern alternative to the standard snipping tool, built entirely 
    - Drag and drop the selected element (pencils, highlighters, lines, arrows, rectangles, circles, or text) to move it.
    - Nudge elements using keyboard **Arrow Keys** (1-pixel increments) or **Shift + Arrow Keys** (5-pixel increments) for perfect alignments.
 
-3. **Text Annotation & Modification**:
+3. **Dynamic Scaling & Canvas Zooming**:
+   - **Scroll Wheel Element Resizing**: With the selection tool active, select any shape or text block and simply scroll the mouse wheel up/down to dynamically resize it.
+   - **Keyboard Element Scaling**: Resize selected elements by 10% increments using the `+` (plus/equals) and `-` (minus) keys.
+   - **Canvas Zoom (25% to 300%)**: Zoom in/out of your workspace using the magnifying glass toolbar buttons or holding the **Control (`Ctrl`)** key while scrolling the mouse wheel.
+   - Resolution-independent coordinates ensure saved captures and clipboard copies are preserved at original high-resolution quality.
+
+4. **Dynamic Selection Formatting**:
+   - Change the color swatches, brush stroke thickness, shape fill options (hollow vs filled), font size, or font family of a selected element dynamically from the toolbar in real-time.
+
+5. **Font Family dropdown Customization**:
+   - Select font styles from a dropdown list of 7 cross-platform system fonts: `Arial, Times New Roman, Courier New, Georgia, Segoe UI, Verdana, Impact`.
+   - Text editing double-clicks automatically preserve the text block's specific font style.
+
+6. **Text Annotation & Modification**:
    - Add text labels to snippets easily. Inputs use black text on a white background, ensuring readability while typing regardless of the active drawing color.
-   - With the Text tool active, click on any existing text block to open the entry box pre-filled, allowing easy corrections and changes.
+   - Click on any existing text block to open the entry box pre-filled, allowing easy corrections and changes.
 
-4. **Dynamic Image Cropping**:
-   - Drag a crop box over any captured snippet.
-   - Releasing the mouse crops the region, bakes existing annotations, and dynamically adjusts the workspace window size to match the new dimensions.
+7. **Dynamic Image Cropping**:
+   - Drag a crop box over any captured snippet. Releasing the mouse crops the region, bakes existing annotations, and dynamically adjusts the workspace window size.
 
-5. **Aesthetics & Typography**:
-   - Styled globally with **Arial** and **Arial Bold** typography.
-   - Context-sensitive status bar guides you on how to use select, text, and crop tools in real-time.
-
-6. **Clipboard & File Management**:
+8. **Clipboard & File Management**:
    - **Native Copy to Clipboard**: Copies the edited canvas image directly to the Windows Clipboard (CF_DIB format) so you can paste it (`Ctrl+V`) directly into other apps.
    - **Custom Exports**: Set default save paths, custom file naming patterns using `{datetime}` or `{index}`, and save in PNG, JPEG, or BMP formats.
    - Full Undo and Redo operations.
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## ⌨️ Keyboard & Mouse Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
+| `Mouse Wheel` | Resize active selected element (in Select mode) |
+| `Ctrl + Mouse Wheel` | Zoom canvas workspace In / Out |
+| `+` (Plus / Equals) | Scale selected element larger by 10% |
+| `-` (Minus) | Scale selected element smaller by 10% |
+| `Arrow Keys` | Nudge selected element by 1px |
+| `Shift + Arrow Keys` | Nudge selected element by 5px |
 | `Ctrl + N` | Trigger new screen capture viewfinder |
 | `Ctrl + C` | Copy current edited image to OS clipboard |
 | `Ctrl + S` | Quick-save image to default path |
 | `Ctrl + Shift + S` | Open Save As export dialog |
 | `Ctrl + Z` | Undo last drawing/movement |
 | `Ctrl + Y` | Redo last drawing/movement |
-| `Arrow Keys` | Nudge selected element by 1px |
-| `Shift + Arrow Keys` | Nudge selected element by 5px |
 | `Escape` | Cancel screen capture overlay |
 
 ---
