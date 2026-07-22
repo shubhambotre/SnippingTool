@@ -12,12 +12,12 @@ from canvas_editor import CanvasEditor
 from icons import get_icon
 
 class StyledEntry(tk.Entry):
-    """Custom flat entry widget with light theme borders, decent font, and active highlights."""
+    """Custom flat entry widget with light theme borders, Arial font, and active highlights."""
     def __init__(self, parent, **kwargs):
         bg = kwargs.pop("bg", "#FFFFFF")
         fg = kwargs.pop("fg", "#0E1013")
         insertbackground = kwargs.pop("insertbackground", "#005FB8")
-        font = kwargs.pop("font", ("Segoe UI", 9))
+        font = kwargs.pop("font", ("Arial", 9))
         
         super().__init__(
             parent, bg=bg, fg=fg, insertbackground=insertbackground, font=font,
@@ -30,19 +30,19 @@ class SnippingToolApp:
         self.root = root
         self.root.title("Snipping Tool")
         
-        # Start compact horizontal launcher pill - expanded to 820px to fit new Select & Move tool on one line
+        # Start compact horizontal launcher pill - expanded to 820px to fit tools neatly
         self.root.geometry("820x72")
         self.root.resizable(True, True)
         
         # Load configuration settings
         self.config = AppConfig()
         
-        # Decent Font System definitions
-        self.font_main = ("Segoe UI", 9)
-        self.font_bold = ("Segoe UI Semibold", 9)
-        self.font_title = ("Segoe UI Semibold", 10, "bold")
-        self.font_status = ("Segoe UI Semibold", 8)
-        self.font_status_italic = ("Segoe UI", 8, "italic")
+        # Arial Font System definitions (decent bold/regular combinations)
+        self.font_main = ("Arial", 9)
+        self.font_bold = ("Arial", 9, "bold")
+        self.font_title = ("Arial", 10, "bold")
+        self.font_status = ("Arial", 8, "bold")
+        self.font_status_italic = ("Arial", 8, "italic")
         
         # Light Theme Color Token System (White interface)
         self.bg_color = "#FFFFFF"       # Solid white background
@@ -59,7 +59,7 @@ class SnippingToolApp:
         self.style = ttk.Style()
         self.style.theme_use("clam")
         
-        # Apply decent Segoe UI font family globally on all TTK widgets
+        # Apply decent Arial font family globally on all TTK widgets
         self.style.configure(".", background=self.panel_bg, foreground=self.text_color, font=self.font_main)
         self.style.configure("TLabel", background=self.panel_bg, foreground=self.text_color, font=self.font_bold)
         self.style.configure("TCombobox", fieldbackground="#FFFFFF", background=self.panel_bg, foreground=self.text_color, arrowcolor=self.text_color, bd=0, font=self.font_main)
@@ -89,7 +89,7 @@ class SnippingToolApp:
         self.root.bind("<Control-n>", lambda e: self.start_capture())
 
     def build_ui(self):
-        """Builds the compact light-themed interface with decent typography."""
+        """Builds the compact light-themed interface with Arial typography."""
         # Top toolbar frame container
         self.toolbar_frame = tk.Frame(self.root, bg=self.panel_bg, bd=0, height=50)
         self.toolbar_frame.pack(side=tk.TOP, fill=tk.X)
@@ -330,7 +330,7 @@ class SnippingToolApp:
         if tool_name == "select":
             self.lbl_status_tool.config(text="TOOL: SELECT (CLICK & DRAG TEXT TO MOVE)")
         elif tool_name == "text":
-            self.lbl_status_tool.config(text="TOOL: TEXT (CLICK CANVAS TO TYPE / DOUBLE-CLICK TEXT TO EDIT)")
+            self.lbl_status_tool.config(text="TOOL: TEXT (CLICK CANVAS TO TYPE / CLICK TEXT TO EDIT)")
         elif tool_name == "crop":
             self.lbl_status_tool.config(text="TOOL: CROP (DRAG BOX & RELEASE TO CROP)")
         else:

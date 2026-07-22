@@ -5,11 +5,12 @@ import os
 from PIL import Image, ImageDraw, ImageTk, ImageFont
 
 def get_pillow_font(size):
-    """Loads a high-quality TrueType font from Windows or returns default."""
+    """Loads Arial Bold font from Windows or returns default."""
     font_paths = [
-        "C:\\Windows\\Fonts\\segoeui.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\calibri.ttf"
+        "C:\\Windows\\Fonts\\arialbd.ttf", # Arial Bold
+        "C:\\Windows\\Fonts\\arial.ttf",   # Arial Regular
+        "C:\\Windows\\Fonts\\segoeuib.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf"
     ]
     for path in font_paths:
         if os.path.exists(path):
@@ -225,7 +226,6 @@ class CanvasEditor(tk.Frame):
                 new_y = cy - self.drag_offset_y
                 w_img, h_img = self.base_image.size
                 
-                # Boundaries checking
                 new_x = max(0, min(new_x, w_img - 20))
                 new_y = max(0, min(new_y, h_img - 20))
                 
@@ -314,7 +314,6 @@ class CanvasEditor(tk.Frame):
         
         action = None
         if self.tool == "select":
-            # Drag selection finishes: trigger callback to update clipboard/undo stack state
             if self.selected_text_index is not None:
                 if self.on_draw_callback:
                     self.on_draw_callback()
@@ -428,11 +427,15 @@ class CanvasEditor(tk.Frame):
 
     def create_text_input(self, x, y, prefill="", index=None):
         """Spawns text entry box. Prefills and inserts at index if modifying."""
+        # Cyan border outline for text frame
         entry_frame = tk.Frame(self.canvas, bg="#005FB8", bd=1)
+        
+        # FIXED: Always use black text (#0E1013) on white background (#FFFFFF) with explicit width=25
+        # This prevents light active colors (e.g. white, yellow, cyan) from drawing invisibly during input
         entry = tk.Entry(
-            entry_frame, fg=self.color, bg="#FFFFFF",
-            font=("Segoe UI Semibold", self.font_size), bd=0,
-            highlightthickness=0, insertbackground=self.color,
+            entry_frame, fg="#0E1013", bg="#FFFFFF",
+            font=("Arial", self.font_size, "bold"), bd=0, width=25,
+            highlightthickness=0, insertbackground="#005FB8",
             selectbackground="#E5E5E5", selectforeground="#0E1013"
         )
         entry.pack(padx=2, pady=2)
@@ -454,7 +457,7 @@ class CanvasEditor(tk.Frame):
                     "type": "text",
                     "coords": (x, y),
                     "text": text_str,
-                    "color": self.color,
+                    "color": self.color, # Saved in the selected drawing color
                     "font_size": self.font_size
                 }
                 if index is not None:
@@ -484,7 +487,7 @@ class CanvasEditor(tk.Frame):
                 w / 2, h / 2,
                 text="[ CLICK 'NEW' TO CAPTURE THE SCREEN ]",
                 fill="#5F6368",
-                font=("Segoe UI Semibold", 10),
+                font=("Arial", 10, "bold"),
                 justify=tk.CENTER,
                 tags="welcome"
             )
@@ -496,7 +499,6 @@ class CanvasEditor(tk.Frame):
             0, 0, anchor=tk.NW, image=self.bg_image_tk, tags="background"
         )
         
-        # If selection tool is active, draw dashed box around active selected text
         if self.tool == "select" and self.selected_text_index is not None:
             if self.selected_text_index < len(self.history):
                 action = self.history[self.selected_text_index]
