@@ -960,12 +960,25 @@ class CanvasEditor(tk.Frame):
             
             cy = h / 2
             
-            # Vector camera icon
-            self.canvas.create_rectangle(w/2 - 32, cy - 90, w/2 + 32, cy - 40, outline=muted_color, width=2, tags="welcome")
-            self.canvas.create_polygon([w/2 - 15, cy - 90, w/2 - 8, cy - 100, w/2 + 8, cy - 100, w/2 + 15, cy - 90], outline=muted_color, fill="", width=2, tags="welcome")
-            self.canvas.create_oval(w/2 - 16, cy - 80, w/2 + 16, cy - 50, outline=muted_color, width=2, tags="welcome")
-            self.canvas.create_oval(w/2 - 5, cy - 69, w/2 + 5, cy - 59, fill=muted_color, outline="", tags="welcome")
-            self.canvas.create_oval(w/2 + 18, cy - 84, w/2 + 22, cy - 80, fill=muted_color, outline="", tags="welcome")
+            # Logo display with vector fallback
+            logo_path = os.path.join(os.path.dirname(__file__), "SnippingToolLogo.png")
+            has_logo = False
+            if os.path.exists(logo_path):
+                try:
+                    logo_img = Image.open(logo_path).convert("RGBA")
+                    logo_scaled = logo_img.resize((80, 80), Image.Resampling.LANCZOS)
+                    self.logo_tk = ImageTk.PhotoImage(logo_scaled)
+                    self.canvas.create_image(w/2, cy - 65, image=self.logo_tk, tags="welcome")
+                    has_logo = True
+                except Exception:
+                    pass
+            
+            if not has_logo:
+                self.canvas.create_rectangle(w/2 - 32, cy - 90, w/2 + 32, cy - 40, outline=muted_color, width=2, tags="welcome")
+                self.canvas.create_polygon([w/2 - 15, cy - 90, w/2 - 8, cy - 100, w/2 + 8, cy - 100, w/2 + 15, cy - 90], outline=muted_color, fill="", width=2, tags="welcome")
+                self.canvas.create_oval(w/2 - 16, cy - 80, w/2 + 16, cy - 50, outline=muted_color, width=2, tags="welcome")
+                self.canvas.create_oval(w/2 - 5, cy - 69, w/2 + 5, cy - 59, fill=muted_color, outline="", tags="welcome")
+                self.canvas.create_oval(w/2 + 18, cy - 84, w/2 + 22, cy - 80, fill=muted_color, outline="", tags="welcome")
             
             # Text layout
             self.canvas.create_text(

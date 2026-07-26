@@ -31,6 +31,16 @@ class SnippingToolApp:
         self.root = root
         self.root.title("Snipping Tool")
         
+        # Set window icon photo
+        logo_path = os.path.join(os.path.dirname(__file__), "SnippingToolLogo.png")
+        if os.path.exists(logo_path):
+            try:
+                logo_img = Image.open(logo_path)
+                self.logo_photo = ImageTk.PhotoImage(logo_img)
+                self.root.iconphoto(True, self.logo_photo)
+            except Exception:
+                pass
+                
         # Start compact horizontal launcher pill - expanded to 900px to fit tools neatly
         self.root.geometry("900x102")
         self.root.resizable(True, True)
