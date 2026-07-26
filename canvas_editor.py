@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 import math
 import os
+import copy
 from PIL import Image, ImageDraw, ImageTk, ImageFont
 
 def get_pillow_font(family, size=None):
@@ -73,6 +74,8 @@ class CanvasEditor(tk.Frame):
         self.selected_index = None
         self.last_mouse_x = 0
         self.last_mouse_y = 0
+        self.active_handle = None
+        self.drag_start_action = None
         
         # Drawing helpers
         self.start_x = None
@@ -132,6 +135,8 @@ class CanvasEditor(tk.Frame):
     def set_tool(self, tool):
         self.tool = tool
         self.selected_index = None
+        self.active_handle = None
+        self.drag_start_action = None
         self.redraw()
         
         if tool == "eraser":
@@ -256,6 +261,49 @@ class CanvasEditor(tk.Frame):
             if self.on_draw_callback:
                 self.on_draw_callback()
 
+    def get_handles(self, action):
+        t = action["type"]
+        if t in ("rectangle", "circle"):
+            x1, y1, x2, y2 = action["coords"]
+            rx1, ry1 = min(x1, x2), min(y1, y2)
+            rx2, ry2 = max(x1, x2), max(y1, y2)
+            return [
+                ("TL", rx1, ry1),
+                ("TR", rx2, ry1),
+                ("BL", rx1, ry2),
+                ("BR", rx2, ry2)
+            ]
+        elif t in ("line", "arrow"):
+            x1, y1, x2, y2 = action["coords"]
+            return [
+                ("E1", x1, y1),
+                ("E2", x2, y2)
+            ]
+        elif t == "text":
+            x, y = action["coords"]
+            font_size = action["font_size"]
+            text_w = len(action["text"]) * (font_size * 0.6)
+            text_h = font_size
+            return [
+                ("TL", x, y),
+                ("TR", x + text_w, y),
+                ("BL", x, y + text_h),
+                ("BR", x + text_w, y + text_h)
+            ]
+        elif t in ("pencil", "highlighter"):
+            pts = action["points"]
+            xs = [pt[0] for pt in pts]
+            ys = [pt[1] for pt in pts]
+            bx1, by1 = min(xs), min(ys)
+            bx2, by2 = max(xs), max(ys)
+            return [
+                ("TL", bx1, by1),
+                ("TR", bx2, by1),
+                ("BL", bx1, by2),
+                ("BR", bx2, by2)
+            ]
+        return []
+
     def on_mouse_move(self, event):
         if self.cursor_callback:
             cx = int(self.canvas.canvasx(event.x) / self.zoom_factor)
@@ -266,6 +314,31 @@ class CanvasEditor(tk.Frame):
                 cy = max(0, min(cy, h - 1))
             self.cursor_callback(cx, cy)
 
+        if self.tool == "select" and self.selected_index is not None:
+            if self.selected_index < len(self.history):
+                action = self.history[self.selected_index]
+                handles = self.get_handles(action)
+                mx = self.canvas.canvasx(event.x)
+                my = self.canvas.canvasy(event.y)
+                
+                hovered_handle = None
+                for name, hx, hy in handles:
+                    hx_s = hx * self.zoom_factor
+                    hy_s = hy * self.zoom_factor
+                    if math.sqrt((mx - hx_s)**2 + (my - hy_s)**2) < 8:
+                        hovered_handle = name
+                        break
+                        
+                if hovered_handle:
+                    if hovered_handle in ("TL", "BR"):
+                        self.canvas.config(cursor="size_nw_se")
+                    elif hovered_handle in ("TR", "BL"):
+                        self.canvas.config(cursor="size_ne_sw")
+                    elif hovered_handle in ("E1", "E2"):
+                        self.canvas.config(cursor="crosshair")
+                else:
+                    self.canvas.config(cursor="arrow")
+
     def on_press(self, event):
         if not self.base_image:
             return
@@ -275,6 +348,25 @@ class CanvasEditor(tk.Frame):
         
         # Focus canvas so keypress events register
         self.canvas.focus_set()
+        
+        self.active_handle = None
+        self.drag_start_action = None
+        
+        if self.tool == "select" and self.selected_index is not None:
+            action = self.history[self.selected_index]
+            handles = self.get_handles(action)
+            mx = self.canvas.canvasx(event.x)
+            my = self.canvas.canvasy(event.y)
+            
+            for name, hx, hy in handles:
+                hx_s = hx * self.zoom_factor
+                hy_s = hy * self.zoom_factor
+                if math.sqrt((mx - hx_s)**2 + (my - hy_s)**2) < 8:
+                    self.active_handle = name
+                    self.drag_start_action = copy.deepcopy(action)
+                    self.last_mouse_x = self.start_x
+                    self.last_mouse_y = self.start_y
+                    return
         
         if self.tool == "select":
             self.selected_index = None
@@ -364,24 +456,134 @@ class CanvasEditor(tk.Frame):
             
         if self.tool == "select":
             if self.selected_index is not None:
-                dx = cx - self.last_mouse_x
-                dy = cy - self.last_mouse_y
-                self.last_mouse_x = cx
-                self.last_mouse_y = cy
-                
-                # Apply translation to selected action
-                action = self.history[self.selected_index]
-                t = action["type"]
-                if t == "text":
-                    ax, ay = action["coords"]
-                    action["coords"] = (ax + dx, ay + dy)
-                elif t in ("pencil", "highlighter"):
-                    action["points"] = [(p[0] + dx, p[1] + dy) for p in action["points"]]
-                elif t in ("line", "arrow", "rectangle", "circle"):
-                    x1, y1, x2, y2 = action["coords"]
-                    action["coords"] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+                if self.active_handle is not None and self.drag_start_action is not None:
+                    # Perform resize logic
+                    action = self.history[self.selected_index]
+                    t = action["type"]
                     
-                self.redraw()
+                    if t in ("rectangle", "circle"):
+                        ox1, oy1, ox2, oy2 = self.drag_start_action["coords"]
+                        orx1, ory1 = min(ox1, ox2), min(oy1, oy2)
+                        orx2, ory2 = max(ox1, ox2), max(oy1, oy2)
+                        
+                        if self.active_handle == "TL":
+                            rx1 = orx1 + (cx - self.start_x)
+                            ry1 = ory1 + (cy - self.start_y)
+                            action["coords"] = (rx1, ry1, orx2, ory2)
+                        elif self.active_handle == "TR":
+                            rx2 = orx2 + (cx - self.start_x)
+                            ry1 = ory1 + (cy - self.start_y)
+                            action["coords"] = (orx1, ry1, rx2, ory2)
+                        elif self.active_handle == "BL":
+                            rx1 = orx1 + (cx - self.start_x)
+                            ry2 = ory2 + (cy - self.start_y)
+                            action["coords"] = (rx1, ory1, orx2, ry2)
+                        elif self.active_handle == "BR":
+                            rx2 = orx2 + (cx - self.start_x)
+                            ry2 = ory2 + (cy - self.start_y)
+                            action["coords"] = (orx1, ory1, rx2, ry2)
+                            
+                    elif t in ("line", "arrow"):
+                        ox1, oy1, ox2, oy2 = self.drag_start_action["coords"]
+                        if self.active_handle == "E1":
+                            action["coords"] = (ox1 + (cx - self.start_x), oy1 + (cy - self.start_y), ox2, oy2)
+                        elif self.active_handle == "E2":
+                            action["coords"] = (ox1, oy1, ox2 + (cx - self.start_x), oy2 + (cy - self.start_y))
+                            
+                    elif t == "text":
+                        ox, oy = self.drag_start_action["coords"]
+                        ofs = self.drag_start_action["font_size"]
+                        otext = self.drag_start_action["text"]
+                        otext_w = len(otext) * (ofs * 0.6)
+                        otext_h = ofs
+                        
+                        if self.active_handle == "BR":
+                            current_w = cx - ox
+                            current_h = cy - oy
+                            scale_w = current_w / otext_w if otext_w > 0 else 1.0
+                            scale_h = current_h / otext_h if otext_h > 0 else 1.0
+                            scale = max(0.1, max(scale_w, scale_h))
+                            action["font_size"] = max(6, min(120, int(round(ofs * scale))))
+                        elif self.active_handle == "BL":
+                            current_w = (ox + otext_w) - cx
+                            current_h = cy - oy
+                            scale_w = current_w / otext_w if otext_w > 0 else 1.0
+                            scale_h = current_h / otext_h if otext_h > 0 else 1.0
+                            scale = max(0.1, max(scale_w, scale_h))
+                            action["font_size"] = max(6, min(120, int(round(ofs * scale))))
+                            new_text_w = len(otext) * (action["font_size"] * 0.6)
+                            action["coords"] = (ox + otext_w - new_text_w, oy)
+                        elif self.active_handle == "TR":
+                            current_w = cx - ox
+                            current_h = (oy + otext_h) - cy
+                            scale_w = current_w / otext_w if otext_w > 0 else 1.0
+                            scale_h = current_h / otext_h if otext_h > 0 else 1.0
+                            scale = max(0.1, max(scale_w, scale_h))
+                            action["font_size"] = max(6, min(120, int(round(ofs * scale))))
+                            new_text_h = action["font_size"]
+                            action["coords"] = (ox, oy + otext_h - new_text_h)
+                        elif self.active_handle == "TL":
+                            current_w = (ox + otext_w) - cx
+                            current_h = (oy + otext_h) - cy
+                            scale_w = current_w / otext_w if otext_w > 0 else 1.0
+                            scale_h = current_h / otext_h if otext_h > 0 else 1.0
+                            scale = max(0.1, max(scale_w, scale_h))
+                            action["font_size"] = max(6, min(120, int(round(ofs * scale))))
+                            new_text_w = len(otext) * (action["font_size"] * 0.6)
+                            new_text_h = action["font_size"]
+                            action["coords"] = (ox + otext_w - new_text_w, oy + otext_h - new_text_h)
+                            
+                    elif t in ("pencil", "highlighter"):
+                        opts = self.drag_start_action["points"]
+                        oxs = [p[0] for p in opts]
+                        oys = [p[1] for p in opts]
+                        obx1, oby1 = min(oxs), min(oys)
+                        obx2, oby2 = max(oxs), max(oys)
+                        ow = obx2 - obx1
+                        oh = oby2 - oby1
+                        
+                        nbx1, nby1, nbx2, nby2 = obx1, oby1, obx2, oby2
+                        if self.active_handle == "TL":
+                            nbx1 = obx1 + (cx - self.start_x)
+                            nby1 = oby1 + (cy - self.start_y)
+                        elif self.active_handle == "TR":
+                            nbx2 = obx2 + (cx - self.start_x)
+                            nby1 = oby1 + (cy - self.start_y)
+                        elif self.active_handle == "BL":
+                            nbx1 = obx1 + (cx - self.start_x)
+                            nby2 = oby2 + (cy - self.start_y)
+                        elif self.active_handle == "BR":
+                            nbx2 = obx2 + (cx - self.start_x)
+                            nby2 = oby2 + (cy - self.start_y)
+                            
+                        nw = nbx2 - nbx1
+                        nh = nby2 - nby1
+                        if ow > 0 and oh > 0:
+                            action["points"] = [
+                                (nbx1 + (p[0] - obx1) * (nw / ow), nby1 + (p[1] - oby1) * (nh / oh))
+                                for p in opts
+                            ]
+                            
+                    self.redraw()
+                else:
+                    dx = cx - self.last_mouse_x
+                    dy = cy - self.last_mouse_y
+                    self.last_mouse_x = cx
+                    self.last_mouse_y = cy
+                    
+                    # Apply translation to selected action
+                    action = self.history[self.selected_index]
+                    t = action["type"]
+                    if t == "text":
+                        ax, ay = action["coords"]
+                        action["coords"] = (ax + dx, ay + dy)
+                    elif t in ("pencil", "highlighter"):
+                        action["points"] = [(p[0] + dx, p[1] + dy) for p in action["points"]]
+                    elif t in ("line", "arrow", "rectangle", "circle"):
+                        x1, y1, x2, y2 = action["coords"]
+                        action["coords"] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+                        
+                    self.redraw()
                 
         elif self.tool == "eraser":
             self.erase_at(cx, cy)
@@ -528,6 +730,8 @@ class CanvasEditor(tk.Frame):
             if self.on_draw_callback:
                 self.on_draw_callback()
                 
+        self.active_handle = None
+        self.drag_start_action = None
         self.start_x = None
         self.start_y = None
 
@@ -791,6 +995,17 @@ class CanvasEditor(tk.Frame):
                         bx2 * self.zoom_factor, by2 * self.zoom_factor,
                         outline="#005FB8", width=1.5, dash=(4, 4), tags="selection_box"
                     )
+                    
+                    # Draw resize handles
+                    handles = self.get_handles(action)
+                    for name, hx, hy in handles:
+                        hx_s = hx * self.zoom_factor
+                        hy_s = hy * self.zoom_factor
+                        r = 4.5
+                        self.canvas.create_oval(
+                            hx_s - r, hy_s - r, hx_s + r, hy_s + r,
+                            fill="#FFFFFF", outline="#005FB8", width=1.5, tags="resize_handle"
+                        )
 
     def get_edited_image(self):
         """Bakes vector history onto a copy of the base image, supporting translucency."""
