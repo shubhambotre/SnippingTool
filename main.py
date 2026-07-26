@@ -10,7 +10,7 @@ from PIL import Image, ImageTk, ImageGrab
 from config import AppConfig
 from capture import CaptureOverlay
 from canvas_editor import CanvasEditor
-from icons import get_icon
+from icons import get_icon, get_button_image
 
 class StyledEntry(tk.Entry):
     """Custom flat entry widget with dynamic themes, Arial font, and active highlights."""
@@ -409,40 +409,72 @@ class SnippingToolApp:
         
         self.update_actions_buttons_state()
 
+    def get_btn_img(self, button, state):
+        """Helper to get button image for a specific state ('normal', 'hover', 'active')."""
+        icon_name = button.icon_name
+        icon_col = "#333333" if self.theme_name == "light" else "#DDDDDD"
+        
+        if state == "active":
+            bg = self.active_tool_bg
+            border = self.accent_color
+            icon_col = self.accent_color
+        elif state == "hover":
+            bg = self.btn_bg
+            border = self.border_color
+        else:
+            bg = self.panel_bg
+            border = None
+            
+        return get_button_image(icon_name, icon_col, bg, border, size=(30, 30), icon_size=(16, 16))
+
     def make_icon_button(self, parent, icon_name, command):
         """Builds a flat button styled dynamically based on theme icons."""
-        icon_col = "#333333" if self.theme_name == "light" else "#DDDDDD"
-        icon = get_icon(icon_name, icon_col)
         btn = tk.Button(
-            parent, image=icon, command=command, bg=self.panel_bg,
-            activebackground=self.btn_bg, bd=0, relief="flat", padx=8, pady=8
+            parent, command=command, bg=self.panel_bg,
+            activebackground=self.panel_bg, bd=0, relief="flat", highlightthickness=0
         )
-        btn.image = icon # Prevent GC
-        btn.bind("<Enter>", lambda e: btn.config(bg=self.btn_bg))
-        btn.bind("<Leave>", lambda e: btn.config(bg=self.panel_bg if not self.is_active_tool(icon_name) else self.active_tool_bg))
+        btn.icon_name = icon_name
+        
+        img_normal = self.get_btn_img(btn, "normal")
+        btn.config(image=img_normal)
+        btn.image = img_normal
+        
+        # Hover bindings
+        def on_enter(e):
+            if not self.is_active_tool(btn.icon_name):
+                img_hover = self.get_btn_img(btn, "hover")
+                btn.config(image=img_hover)
+                btn.image = img_hover
+                
+        def on_leave(e):
+            state = "active" if self.is_active_tool(btn.icon_name) else "normal"
+            img_state = self.get_btn_img(btn, state)
+            btn.config(image=img_state)
+            btn.image = img_state
+            
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
         return btn
 
     def update_icons(self):
         """Refreshes all toolbar icons to match Light/Dark high contrast specifications."""
-        icon_col = "#333333" if self.theme_name == "light" else "#DDDDDD"
-        
         self.icon_camera = get_icon("camera", "#FFFFFF", size=(16, 16))
         self.btn_new.config(image=self.icon_camera)
         
         # Refresh utilities on the right
-        for button, name in [
-            (self.btn_settings, "settings"),
-            (self.btn_save_as, "save"),
-            (self.btn_copy, "copy"),
-            (self.btn_clear, "clear"),
-            (self.btn_zoom_in, "zoom_in"),
-            (self.btn_zoom_out, "zoom_out"),
-            (self.btn_redo, "redo"),
-            (self.btn_undo, "undo")
+        for button in [
+            self.btn_settings,
+            self.btn_save_as,
+            self.btn_copy,
+            self.btn_clear,
+            self.btn_zoom_in,
+            self.btn_zoom_out,
+            self.btn_redo,
+            self.btn_undo
         ]:
-            icon = get_icon(name, icon_col)
-            button.config(image=icon)
-            button.image = icon
+            img = self.get_btn_img(button, "normal")
+            button.config(image=img)
+            button.image = img
             
         # Refresh drawing tools active/inactive indicators
         self.set_tool(self.config.get("last_tool"))
@@ -497,17 +529,12 @@ class SnippingToolApp:
         else:
             self.lbl_status_tool.config(text=f"TOOL: {tool_name.upper()}")
         
-        icon_inactive_col = "#333333" if self.theme_name == "light" else "#DDDDDD"
-        # Highlight active tool button with Cobalt icon
+        # Highlight active tool button with Cobalt icon and active state
         for name, button in self.tool_buttons.items():
-            if name == tool_name:
-                icon_active = get_icon(name, self.accent_color)
-                button.config(bg=self.active_tool_bg, image=icon_active)
-                button.image = icon_active
-            else:
-                icon_inactive = get_icon(name, icon_inactive_col)
-                button.config(bg=self.panel_bg, image=icon_inactive)
-                button.image = icon_inactive
+            state = "active" if name == tool_name else "normal"
+            img = self.get_btn_img(button, state)
+            button.config(image=img)
+            button.image = img
 
     def set_color(self, color_hex):
         self.config.set("last_color", color_hex)
