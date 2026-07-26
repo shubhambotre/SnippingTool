@@ -32,7 +32,7 @@ class SnippingToolApp:
         self.root.title("Snipping Tool")
         
         # Set window icon photo
-        logo_path = os.path.join(os.path.dirname(__file__), "SnippingToolLogo.png")
+        logo_path = os.path.join(os.path.dirname(__file__), "SnippingTool.png")
         if os.path.exists(logo_path):
             try:
                 logo_img = Image.open(logo_path)

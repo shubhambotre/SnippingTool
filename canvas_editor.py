@@ -961,7 +961,7 @@ class CanvasEditor(tk.Frame):
             cy = h / 2
             
             # Logo display with vector fallback
-            logo_path = os.path.join(os.path.dirname(__file__), "SnippingToolLogo.png")
+            logo_path = os.path.join(os.path.dirname(__file__), "SnippingTool.png")
             has_logo = False
             if os.path.exists(logo_path):
                 try:
