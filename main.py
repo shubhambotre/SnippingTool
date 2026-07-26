@@ -200,7 +200,7 @@ class SnippingToolApp:
         left_grp.pack(side=tk.LEFT, fill=tk.Y, padx=5)
         
         # New Crop button with white icon on active Cobalt background
-        self.icon_camera = get_icon("camera", "#FFFFFF", size=(16, 16))
+        self.icon_camera = get_icon("camera", "#FFFFFF", size=(20, 20))
         self.btn_new = tk.Button(
             left_grp, text=" New", image=self.icon_camera, compound=tk.LEFT,
             command=self.start_capture, bg=self.accent_color, fg="#FFFFFF",
@@ -425,7 +425,7 @@ class SnippingToolApp:
             bg = self.panel_bg
             border = None
             
-        return get_button_image(icon_name, icon_col, bg, border, size=(30, 30), icon_size=(16, 16))
+        return get_button_image(icon_name, icon_col, bg, border, size=(34, 34), icon_size=(20, 20))
 
     def make_icon_button(self, parent, icon_name, command):
         """Builds a flat button styled dynamically based on theme icons."""
@@ -458,7 +458,7 @@ class SnippingToolApp:
 
     def update_icons(self):
         """Refreshes all toolbar icons to match Light/Dark high contrast specifications."""
-        self.icon_camera = get_icon("camera", "#FFFFFF", size=(16, 16))
+        self.icon_camera = get_icon("camera", "#FFFFFF", size=(20, 20))
         self.btn_new.config(image=self.icon_camera)
         
         # Refresh utilities on the right
