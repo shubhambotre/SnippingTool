@@ -8,17 +8,17 @@ def draw_vector_icon(draw, name, color, size):
     w, h = size
     
     if name == "camera":
-        draw.rounded_rectangle([2, 5, w-3, h-3], radius=2, outline=color, width=1.5)
-        draw.ellipse([w//2-4, h//2-2, w//2+4, h//2+6], outline=color, width=1.5)
+        draw.rounded_rectangle([2, 5, w-3, h-3], radius=2, outline=color, width=1)
+        draw.ellipse([w//2-4, h//2-2, w//2+4, h//2+6], outline=color, width=1)
         draw.ellipse([w-7, 7, w-5, 9], fill=color)
         draw.rectangle([w//2-3, 2, w//2+3, 5], fill=color)
         
     elif name == "pencil":
-        draw.polygon([(3, h-3), (6, h-3), (w-3, 6), (w-6, 3)], outline=color, width=1.5)
-        draw.line([(3, h-3), (5, h-5)], fill=color, width=1.5)
+        draw.polygon([(3, h-3), (6, h-3), (w-3, 6), (w-6, 3)], outline=color, width=1)
+        draw.line([(3, h-3), (5, h-5)], fill=color, width=1)
         
     elif name == "highlighter":
-        draw.polygon([(3, h-3), (8, h-3), (w-3, 8), (w-8, 3)], outline=color, width=1.5)
+        draw.polygon([(3, h-3), (8, h-3), (w-3, 8), (w-8, 3)], outline=color, width=1)
         draw.line([(5, h-11), (11, h-5)], fill=color, width=1)
         
     elif name == "line":
@@ -29,25 +29,25 @@ def draw_vector_icon(draw, name, color, size):
         draw.polygon([w-3, 3, w-4, 11, w-11, 4], fill=color)
         
     elif name == "rectangle":
-        draw.rectangle([3, 3, w-3, h-3], outline=color, width=1.5)
+        draw.rectangle([3, 3, w-3, h-3], outline=color, width=1)
         
     elif name == "circle":
-        draw.ellipse([3, 3, w-3, h-3], outline=color, width=1.5)
+        draw.ellipse([3, 3, w-3, h-3], outline=color, width=1)
         
     elif name == "text":
-        draw.line([3, 4, w-3, 4], fill=color, width=1.5)
-        draw.line([w//2, 4, w//2, h-4], fill=color, width=1.5)
-        draw.line([w//2-3, h-4, w//2+3, h-4], fill=color, width=1.5)
+        draw.line([3, 4, w-3, 4], fill=color, width=1)
+        draw.line([w//2, 4, w//2, h-4], fill=color, width=1)
+        draw.line([w//2-3, h-4, w//2+3, h-4], fill=color, width=1)
         
     elif name == "eraser":
-        draw.polygon([(3, h-6), (7, h-3), (w-3, 7), (w-7, 4)], outline=color, width=1.5)
-        draw.line([(7, h-10), (12, h-7)], fill=color, width=1.5)
+        draw.polygon([(3, h-6), (7, h-3), (w-3, 7), (w-7, 4)], outline=color, width=1)
+        draw.line([(7, h-10), (12, h-7)], fill=color, width=1)
         
     elif name == "crop":
-        draw.line([(3, 7), (w-6, 7)], fill=color, width=1.5)
-        draw.line([(7, 3), (7, h-6)], fill=color, width=1.5)
-        draw.line([(w-7, 7), (w-7, h-3)], fill=color, width=1.5)
-        draw.line([(7, h-7), (w-3, h-7)], fill=color, width=1.5)
+        draw.line([(3, 7), (w-6, 7)], fill=color, width=1)
+        draw.line([(7, 3), (7, h-6)], fill=color, width=1)
+        draw.line([(w-7, 7), (w-7, h-3)], fill=color, width=1)
+        draw.line([(7, h-7), (w-3, h-7)], fill=color, width=1)
         
     elif name in ("select", "pointer"):
         # Scaled vector pointer cursor arrow
@@ -63,52 +63,52 @@ def draw_vector_icon(draw, name, color, size):
         draw.polygon(p_coords, fill=color)
         
     elif name == "zoom_in":
-        draw.ellipse([2, 2, w-8, h-8], outline=color, width=1.5)
-        draw.line([w-9, h-9, w-3, h-3], fill=color, width=2.5)
+        draw.ellipse([2, 2, w-8, h-8], outline=color, width=1)
+        draw.line([w-9, h-9, w-3, h-3], fill=color, width=2)
         cx, cy = (w-5)//2, (h-5)//2
-        draw.line([cx-3, cy, cx+3, cy], fill=color, width=1.5)
-        draw.line([cx, cy-3, cx, cy+3], fill=color, width=1.5)
+        draw.line([cx-3, cy, cx+3, cy], fill=color, width=1)
+        draw.line([cx, cy-3, cx, cy+3], fill=color, width=1)
         
     elif name == "zoom_out":
-        draw.ellipse([2, 2, w-8, h-8], outline=color, width=1.5)
-        draw.line([w-9, h-9, w-3, h-3], fill=color, width=2.5)
+        draw.ellipse([2, 2, w-8, h-8], outline=color, width=1)
+        draw.line([w-9, h-9, w-3, h-3], fill=color, width=2)
         cx, cy = (w-5)//2, (h-5)//2
-        draw.line([cx-3, cy, cx+3, cy], fill=color, width=1.5)
+        draw.line([cx-3, cy, cx+3, cy], fill=color, width=1)
         
     elif name == "undo":
-        draw.arc([3, 5, w-3, h-3], 120, 310, fill=color, width=1.5)
+        draw.arc([3, 5, w-3, h-3], 120, 310, fill=color, width=1)
         draw.polygon([(3, 9), (3, 3), (9, 6)], fill=color)
         
     elif name == "redo":
-        draw.arc([3, 5, w-3, h-3], 230, 60, fill=color, width=1.5)
+        draw.arc([3, 5, w-3, h-3], 230, 60, fill=color, width=1)
         draw.polygon([(w-3, 9), (w-3, 3), (w-9, 6)], fill=color)
         
     elif name == "save":
-        draw.rectangle([3, 3, w-3, h-3], outline=color, width=1.5)
+        draw.rectangle([3, 3, w-3, h-3], outline=color, width=1)
         draw.rectangle([6, 3, w-6, 8], fill=color)
-        draw.rectangle([6, h-9, w-6, h-3], outline=color, width=1.5)
+        draw.rectangle([6, h-9, w-6, h-3], outline=color, width=1)
         
     elif name == "copy":
-        draw.rectangle([3, 6, w-6, h-3], outline=color, width=1.5)
-        draw.rectangle([6, 3, w-3, h-6], outline=color, width=1.5)
+        draw.rectangle([3, 6, w-6, h-3], outline=color, width=1)
+        draw.rectangle([6, 3, w-3, h-6], outline=color, width=1)
         
     elif name == "settings":
-        draw.ellipse([w//2-3, h//2-3, w//2+3, h//2+3], outline=color, width=1.5)
-        draw.ellipse([w//2-6, h//2-6, w//2+6, h//2+6], outline=color, width=1.5)
+        draw.ellipse([w//2-3, h//2-3, w//2+3, h//2+3], outline=color, width=1)
+        draw.ellipse([w//2-6, h//2-6, w//2+6, h//2+6], outline=color, width=1)
         for i in range(8):
             angle = i * (math.pi / 4)
             x1 = int(w//2 + 5 * math.cos(angle))
             y1 = int(h//2 + 5 * math.sin(angle))
             x2 = int(w//2 + 8 * math.cos(angle))
             y2 = int(h//2 + 8 * math.sin(angle))
-            draw.line([x1, y1, x2, y2], fill=color, width=1.5)
+            draw.line([x1, y1, x2, y2], fill=color, width=1)
             
     elif name == "clear":
-        draw.line([3, 5, w-3, 5], fill=color, width=1.5)
-        draw.rectangle([w//2-3, 2, w//2+3, 5], outline=color, width=1.5)
-        draw.rectangle([5, 6, w-5, h-3], outline=color, width=1.5)
-        draw.line([(8, 8), (8, h-6)], fill=color, width=1.5)
-        draw.line([(w-8, 8), (w-8, h-6)], fill=color, width=1.5)
+        draw.line([3, 5, w-3, 5], fill=color, width=1)
+        draw.rectangle([w//2-3, 2, w//2+3, 5], outline=color, width=1)
+        draw.rectangle([5, 6, w-5, h-3], outline=color, width=1)
+        draw.line([(8, 8), (8, h-6)], fill=color, width=1)
+        draw.line([(w-8, 8), (w-8, h-6)], fill=color, width=1)
 
 def get_icon(name, color="#333333", size=(24, 24)):
     """Generates and returns a Tkinter PhotoImage for the requested icon in Light/Dark themes."""
