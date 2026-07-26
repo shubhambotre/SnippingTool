@@ -55,6 +55,7 @@ A streamlined, modern alternative to the standard snipping tool, built entirely 
 | `Arrow Keys` | Nudge selected element by 1px |
 | `Shift + Arrow Keys` | Nudge selected element by 5px |
 | `Ctrl + N` | Trigger new screen capture viewfinder |
+| `Shift + Prt Sc` | Take a full screen capture immediately (global) |
 | `Ctrl + C` | Copy current edited image to OS clipboard |
 | `Ctrl + S` | Quick-save image to default path |
 | `Ctrl + Shift + S` | Open Save As export dialog |

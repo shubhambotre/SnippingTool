@@ -3,7 +3,8 @@ from tkinter import messagebox, filedialog, ttk, colorchooser
 import os
 import time
 import re
-from PIL import Image, ImageTk
+import threading
+from PIL import Image, ImageTk, ImageGrab
 
 # Import local components
 from config import AppConfig
@@ -68,6 +69,9 @@ class SnippingToolApp:
         self.root.bind("<Control-c>", lambda e: self.copy_to_clipboard())
         self.root.bind("<Control-Shift-S>", lambda e: self.save_as())
         self.root.bind("<Control-n>", lambda e: self.start_capture())
+        
+        # Start global hotkey listener
+        self.start_global_hotkey_listener()
 
     def apply_theme_tokens(self):
         """Loads Light or Dark theme color tokens dynamically."""
@@ -553,6 +557,70 @@ class SnippingToolApp:
             
             self.root.lift()
             self.root.focus_force()
+
+    def take_full_screenshot(self):
+        """Hides the main window, captures a full screenshot, and loads it into the editor."""
+        # Hide the main window if it's currently shown
+        self.root.withdraw()
+        self.root.update()
+        
+        # Brief pause to allow the window to fade out
+        time.sleep(0.35)
+        
+        try:
+            image = ImageGrab.grab(all_screens=True)
+        except Exception:
+            try:
+                image = ImageGrab.grab()
+            except Exception as e:
+                messagebox.showerror("Capture Error", f"Failed to grab screen:\n{e}")
+                self.root.deiconify()
+                self.root.update()
+                return
+            
+        # Show main window again
+        self.root.deiconify()
+        self.root.update()
+        
+        self.on_capture_complete(image)
+
+    def start_global_hotkey_listener(self):
+        """Starts a background thread to listen for the global Shift + Print Screen hotkey (Windows only)."""
+        if os.name != 'nt':
+            return
+            
+        def listener():
+            import ctypes
+            from ctypes import wintypes
+            
+            user32 = ctypes.windll.user32
+            
+            # Constants
+            MOD_SHIFT = 0x0004
+            VK_SNAPSHOT = 0x2C  # Print Screen
+            WM_HOTKEY = 0x0312
+            HOTKEY_ID = 101     # Unique ID for our hotkey
+            
+            # Register the hotkey: Shift + Print Screen
+            # Passing None as hwnd registers a thread-specific hotkey.
+            if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_SHIFT, VK_SNAPSHOT):
+                print("Failed to register global Shift + Print Screen hotkey.")
+                return
+                
+            try:
+                msg = wintypes.MSG()
+                while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+                    if msg.message == WM_HOTKEY:
+                        if msg.wParam == HOTKEY_ID:
+                            # Safely schedule screenshot capture on the main tkinter thread
+                            self.root.after(0, self.take_full_screenshot)
+                    user32.TranslateMessage(ctypes.byref(msg))
+                    user32.DispatchMessageW(ctypes.byref(msg))
+            finally:
+                user32.UnregisterHotKey(None, HOTKEY_ID)
+                
+        self.hotkey_thread = threading.Thread(target=listener, daemon=True)
+        self.hotkey_thread.start()
 
     def on_crop_complete(self, w, h):
         self.lbl_status_dims.config(text=f"RESOLUTION: {w} x {h} PX")
