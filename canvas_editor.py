@@ -938,19 +938,110 @@ class CanvasEditor(tk.Frame):
         self.canvas.delete("all")
         self.bg_image_id = None
         
+        # Determine light/dark based on canvas background
+        bg_hex = self.canvas.cget("bg").lower()
+        is_dark = bg_hex in ("#1e1e1e", "#252525", "#141517", "#1c1c1c", "#1a1c1e", "#1f2022")
+        
+        text_color = "#FFFFFF" if is_dark else "#111827"
+        muted_color = "#9CA3AF" if is_dark else "#6B7280"
+        card_bg = "#2D2F31" if is_dark else "#FFFFFF"
+        card_border = "#3F4347" if is_dark else "#E5E7EB"
+        key_bg = "#3A3C3E" if is_dark else "#F3F4F6"
+        key_border = "#4F5357" if is_dark else "#D1D5DB"
+        key_text = "#FFFFFF" if is_dark else "#111827"
+
         if not self.base_image:
             w = self.canvas.winfo_width()
             h = self.canvas.winfo_height()
+            if w <= 1 or h <= 1:
+                # Get window size if not yet rendered
+                w = max(w, 900)
+                h = max(h, 600)
+            
+            cy = h / 2
+            
+            # Vector camera icon
+            self.canvas.create_rectangle(w/2 - 32, cy - 90, w/2 + 32, cy - 40, outline=muted_color, width=2, tags="welcome")
+            self.canvas.create_polygon([w/2 - 15, cy - 90, w/2 - 8, cy - 100, w/2 + 8, cy - 100, w/2 + 15, cy - 90], outline=muted_color, fill="", width=2, tags="welcome")
+            self.canvas.create_oval(w/2 - 16, cy - 80, w/2 + 16, cy - 50, outline=muted_color, width=2, tags="welcome")
+            self.canvas.create_oval(w/2 - 5, cy - 69, w/2 + 5, cy - 59, fill=muted_color, outline="", tags="welcome")
+            self.canvas.create_oval(w/2 + 18, cy - 84, w/2 + 22, cy - 80, fill=muted_color, outline="", tags="welcome")
+            
+            # Text layout
             self.canvas.create_text(
-                w / 2, h / 2,
-                text="[ CLICK 'NEW' TO CAPTURE THE SCREEN ]",
-                fill="#5F6368",
-                font=("Arial", 10, "bold"),
+                w / 2, cy - 15,
+                text="SCREEN SNIP & ANNOTATION BOARD",
+                fill=text_color,
+                font=("Segoe UI", 12, "bold"),
                 justify=tk.CENTER,
                 tags="welcome"
             )
+            self.canvas.create_text(
+                w / 2, cy + 8,
+                text="Press a shortcut below or click 'New Snip' to capture your screen",
+                fill=muted_color,
+                font=("Segoe UI", 9),
+                justify=tk.CENTER,
+                tags="welcome"
+            )
+            
+            # Shortcuts list
+            shortcuts = [
+                (["Shift", "PrtSc"], "Capture Full Screen"),
+                (["Ctrl", "N"], "New Region Snip"),
+                (["Ctrl", "C"], "Copy current snippet"),
+                (["Ctrl", "S"], "Quick-save image")
+            ]
+            
+            start_y = cy + 40
+            for keys, desc in shortcuts:
+                curr_x = w / 2 - 20
+                for i, key in enumerate(reversed(keys)):
+                    kw = len(key) * 7 + 14
+                    curr_x -= kw
+                    # Key shape
+                    self.canvas.create_rectangle(
+                        curr_x, start_y, curr_x + kw, start_y + 18,
+                        fill=key_bg, outline=key_border, width=1, tags="welcome"
+                    )
+                    # Key text
+                    self.canvas.create_text(
+                        curr_x + kw/2, start_y + 9,
+                        text=key, fill=key_text, font=("Consolas", 8, "bold"),
+                        tags="welcome"
+                    )
+                    if i < len(keys) - 1:
+                        curr_x -= 14
+                        self.canvas.create_text(
+                            curr_x + 7, start_y + 9,
+                            text="+", fill=muted_color, font=("Segoe UI", 9, "bold"),
+                            tags="welcome"
+                        )
+                # Description
+                self.canvas.create_text(
+                    w / 2 + 10, start_y + 9,
+                    text=desc, fill=muted_color, font=("Segoe UI", 9),
+                    anchor=tk.W, tags="welcome"
+                )
+                start_y += 26
             return
             
+        # Draw Figma-style dot grid background
+        canvas_w = max(self.canvas.winfo_width(), int(self.base_image.width * self.zoom_factor) + 200)
+        canvas_h = max(self.canvas.winfo_height(), int(self.base_image.height * self.zoom_factor) + 200)
+        
+        grid_img = Image.new("RGBA", (canvas_w, canvas_h), self.canvas.cget("bg"))
+        grid_draw = ImageDraw.Draw(grid_img)
+        
+        grid_spacing = 20
+        dot_color = (100, 110, 120, 40) if is_dark else (200, 210, 220, 80)
+        for x in range(grid_spacing, canvas_w, grid_spacing):
+            for y in range(grid_spacing, canvas_h, grid_spacing):
+                grid_draw.rectangle([x, y, x+1, y+1], fill=dot_color)
+                
+        self.grid_tk = ImageTk.PhotoImage(grid_img)
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.grid_tk, tags="grid")
+        
         # Draw base + vector annotations
         base_rendered = self.get_edited_image()
         
@@ -962,6 +1053,15 @@ class CanvasEditor(tk.Frame):
         else:
             self.current_display_image = base_rendered
             
+        # Draw a clean border/shadow around the screenshot
+        sw = self.current_display_image.width
+        sh = self.current_display_image.height
+        border_col = "#3F4347" if is_dark else "#D1D5DB"
+        self.canvas.create_rectangle(
+            -1, -1, sw + 1, sh + 1,
+            outline=border_col, width=1, tags="shadow"
+        )
+
         self.bg_image_tk = ImageTk.PhotoImage(self.current_display_image)
         self.bg_image_id = self.canvas.create_image(
             0, 0, anchor=tk.NW, image=self.bg_image_tk, tags="background"

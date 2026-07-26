@@ -32,18 +32,18 @@ class SnippingToolApp:
         self.root.title("Snipping Tool")
         
         # Start compact horizontal launcher pill - expanded to 900px to fit tools neatly
-        self.root.geometry("900x72")
+        self.root.geometry("900x102")
         self.root.resizable(True, True)
         
         # Load configuration settings
         self.config = AppConfig()
         
-        # Arial Font System definitions (decent bold/regular combinations)
-        self.font_main = ("Arial", 9)
-        self.font_bold = ("Arial", 9, "bold")
-        self.font_title = ("Arial", 10, "bold")
-        self.font_status = ("Arial", 8, "bold")
-        self.font_status_italic = ("Arial", 8, "italic")
+        # Segoe UI Font System definitions
+        self.font_main = ("Segoe UI", 9)
+        self.font_bold = ("Segoe UI", 9, "bold")
+        self.font_title = ("Segoe UI", 10, "bold")
+        self.font_status = ("Segoe UI", 8, "bold")
+        self.font_status_italic = ("Segoe UI", 8, "italic")
         
         # Load dynamic theme colors from config
         self.apply_theme_tokens()
@@ -77,23 +77,25 @@ class SnippingToolApp:
         """Loads Light or Dark theme color tokens dynamically."""
         self.theme_name = self.config.get("theme")
         if self.theme_name == "dark":
-            self.bg_color = "#1E1E1E"       # Charcoal black background
-            self.panel_bg = "#2D2D2D"       # Dark grey panels
-            self.accent_color = "#0078D4"   # Cobalt active accent
-            self.btn_bg = "#3D3D3D"         # Hover dark grey
-            self.border_color = "#444444"   # Dark dividers
-            self.text_color = "#FFFFFF"     # White text
-            self.text_muted = "#AAAAAA"     # Muted light grey
-            self.canvas_bg = "#252525"      # Dark editor workspace canvas
+            self.bg_color = "#1A1C1E"       # Modern Windows 11 dark frame
+            self.panel_bg = "#2D2F31"       # Dark grey panels
+            self.accent_color = "#3B82F6"   # Modern Fluent Cobalt
+            self.btn_bg = "#3A3C3E"         # Hover button dark grey
+            self.border_color = "#3F4347"   # Dark card border
+            self.text_color = "#F9FAFB"     # High contrast dark text
+            self.text_muted = "#9CA3AF"     # Muted grey
+            self.canvas_bg = "#141517"      # Dark workspace background
+            self.active_tool_bg = "#1E3B8B" # Rich active blue highlights
         else:
-            self.bg_color = "#FFFFFF"       # Solid white background
-            self.panel_bg = "#F3F3F3"       # Clean light grey toolbar
-            self.accent_color = "#005FB8"   # High-contrast Cobalt Blue active accent
-            self.btn_bg = "#EAEAEA"         # Hover button grey
-            self.border_color = "#E5E5E5"   # Thin dividers
-            self.text_color = "#0E1013"     # Dark charcoal text
-            self.text_muted = "#5F6368"     # Muted grey
-            self.canvas_bg = "#EAEAEA"      # Light grey canvas workspace
+            self.bg_color = "#F3F4F6"       # Modern Windows 11 light frame
+            self.panel_bg = "#FFFFFF"       # Clean white cards
+            self.accent_color = "#2563EB"   # Modern Fluent Blue
+            self.btn_bg = "#F3F4F6"         # Hover button grey
+            self.border_color = "#E5E7EB"   # Thin card border
+            self.text_color = "#111827"     # Dark charcoal text
+            self.text_muted = "#6B7280"     # Muted grey
+            self.canvas_bg = "#F3F4F6"      # Light workspace background
+            self.active_tool_bg = "#E0E7FF" # Soft active indigo highlights
 
     def apply_theme_colors(self):
         """Recursively updates all UI widgets, dropdowns, and canvas backgrounds to the selected theme."""
@@ -107,7 +109,7 @@ class SnippingToolApp:
         self.style.configure("TLabel", background=self.panel_bg, foreground=self.text_color, font=self.font_bold)
         self.style.configure(
             "TCombobox", 
-            fieldbackground="#FFFFFF" if self.theme_name == "light" else "#3D3D3D", 
+            fieldbackground="#FFFFFF" if self.theme_name == "light" else "#3A3C3E", 
             background=self.panel_bg, 
             foreground=self.text_color, 
             arrowcolor=self.text_color, 
@@ -116,7 +118,7 @@ class SnippingToolApp:
         )
         self.style.map(
             "TCombobox", 
-            fieldbackground=[("readonly", "#FFFFFF" if self.theme_name == "light" else "#3D3D3D")], 
+            fieldbackground=[("readonly", "#FFFFFF" if self.theme_name == "light" else "#3A3C3E")], 
             foreground=[("readonly", self.text_color)]
         )
         
@@ -142,7 +144,7 @@ class SnippingToolApp:
         if w_class == "Frame":
             if widget == self.root or widget == self.canvas_editor:
                 widget.configure(bg=self.bg_color)
-            elif hasattr(widget, "is_divider") and widget.is_divider:
+            elif (hasattr(widget, "is_divider") and widget.is_divider) or (hasattr(widget, "is_border") and widget.is_border):
                 widget.configure(bg=self.border_color)
             elif hasattr(widget, "is_color_container") and widget.is_color_container:
                 widget.configure(bg=self.panel_bg)
@@ -173,15 +175,15 @@ class SnippingToolApp:
 
     def build_ui(self):
         """Builds the compact horizontal toolbar with Arial typography."""
-        # Top toolbar frame container
-        self.toolbar_frame = tk.Frame(self.root, bg=self.panel_bg, bd=0, height=50)
-        self.toolbar_frame.pack(side=tk.TOP, fill=tk.X)
-        self.toolbar_frame.pack_propagate(False)
+        # Top toolbar border container (Fluent floating design)
+        self.toolbar_border_frame = tk.Frame(self.root, bg=self.border_color)
+        self.toolbar_border_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(10, 0))
+        self.toolbar_border_frame.is_border = True
         
-        # Bottom border line for toolbar
-        self.border_h = tk.Frame(self.root, bg=self.border_color, height=1)
-        self.border_h.pack(side=tk.TOP, fill=tk.X)
-        self.border_h.is_divider = True
+        # Inner panel
+        self.toolbar_frame = tk.Frame(self.toolbar_border_frame, bg=self.panel_bg, bd=0, height=48)
+        self.toolbar_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        self.toolbar_frame.pack_propagate(False)
         
         # --- LEFT: Launch & Mode ---
         left_grp = tk.Frame(self.toolbar_frame, bg=self.panel_bg)
@@ -365,13 +367,15 @@ class SnippingToolApp:
         self.canvas_editor.on_crop_complete_callback = self.on_crop_complete
         self.canvas_editor.on_tool_change_callback = self.set_tool
         
-        # Bottom Status Bar Frame
-        self.status_bar = tk.Frame(self.root, bg=self.panel_bg, bd=0, height=24)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        # Bottom Status Bar border container (Fluent floating design)
+        self.status_border_frame = tk.Frame(self.root, bg=self.border_color)
+        self.status_border_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 10))
+        self.status_border_frame.is_border = True
         
-        self.border_s = tk.Frame(self.status_bar, bg=self.border_color, height=1)
-        self.border_s.pack(side=tk.TOP, fill=tk.X)
-        self.border_s.is_divider = True
+        # Inner panel
+        self.status_bar = tk.Frame(self.status_border_frame, bg=self.panel_bg, bd=0, height=22)
+        self.status_bar.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        self.status_bar.pack_propagate(False)
         
         self.lbl_status_tool = tk.Label(self.status_bar, text="TOOL: PENCIL", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
         self.lbl_status_tool.pack(side=tk.LEFT, padx=15, pady=3)
@@ -405,7 +409,7 @@ class SnippingToolApp:
         )
         btn.image = icon # Prevent GC
         btn.bind("<Enter>", lambda e: btn.config(bg=self.btn_bg))
-        btn.bind("<Leave>", lambda e: btn.config(bg=self.panel_bg if not self.is_active_tool(icon_name) else self.btn_bg))
+        btn.bind("<Leave>", lambda e: btn.config(bg=self.panel_bg if not self.is_active_tool(icon_name) else self.active_tool_bg))
         return btn
 
     def update_icons(self):
@@ -488,7 +492,7 @@ class SnippingToolApp:
         for name, button in self.tool_buttons.items():
             if name == tool_name:
                 icon_active = get_icon(name, self.accent_color)
-                button.config(bg=self.btn_bg, image=icon_active)
+                button.config(bg=self.active_tool_bg, image=icon_active)
                 button.image = icon_active
             else:
                 icon_inactive = get_icon(name, icon_inactive_col)
@@ -626,7 +630,7 @@ class SnippingToolApp:
         self.lbl_status_dims.config(text=f"RESOLUTION: {w} x {h} PX")
         self.lbl_status_zoom.config(text=f"ZOOM: {int(round(self.canvas_editor.zoom_factor * 100))}%")
         win_w = max(900, w + 30)
-        win_h = h + 115
+        win_h = h + 138
         self.root.geometry(f"{win_w}x{win_h}")
 
     def undo(self):
@@ -645,7 +649,7 @@ class SnippingToolApp:
         self.canvas_editor.redo_stack.clear()
         self.canvas_editor.redraw()
         
-        self.root.geometry("900x72")
+        self.root.geometry("900x102")
         self.lbl_status_dims.config(text="RESOLUTION: 0 x 0 PX")
         self.lbl_status_zoom.config(text="ZOOM: 100%")
         self.update_toolbar_state()
