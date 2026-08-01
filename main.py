@@ -13,18 +13,74 @@ from canvas_editor import CanvasEditor
 from icons import get_icon, get_button_image
 
 class StyledEntry(tk.Entry):
-    """Custom flat entry widget with dynamic themes, Arial font, and active highlights."""
+    """Custom flat entry widget with dynamic themes and Segoe UI typography."""
     def __init__(self, parent, **kwargs):
         bg = kwargs.pop("bg", "#FFFFFF")
         fg = kwargs.pop("fg", "#0E1013")
         insertbackground = kwargs.pop("insertbackground", "#005FB8")
-        font = kwargs.pop("font", ("Arial", 9))
+        font = kwargs.pop("font", ("Segoe UI", 9))
         
         super().__init__(
             parent, bg=bg, fg=fg, insertbackground=insertbackground, font=font,
             bd=0, highlightthickness=1, highlightbackground="#D0D0D0",
             highlightcolor="#005FB8", **kwargs
         )
+
+class ToolTip:
+    """Displays a small floating label when hovering over a widget."""
+    def __init__(self, widget, text, delay_ms=600):
+        self.widget = widget
+        self.text = text
+        self.delay_ms = delay_ms
+        self._after_id = None
+        self._tip = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+        widget.bind("<Motion>", self._move, add="+")
+
+    def _schedule(self, event=None):
+        self._cancel()
+        if self.text:
+            self._after_id = self.widget.after(self.delay_ms, self._show)
+
+    def _show(self):
+        self._hide()
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+
+        self._tip = tk.Toplevel(self.widget)
+        self._tip.wm_overrideredirect(True)
+        # Keep the popup on top of the main window so it is always visible.
+        self._tip.attributes("-topmost", True)
+        self._tip.wm_geometry(f"+{x}+{y}")
+        self._tip.lift()
+
+        # Stylish rounded, subtle tooltip that adapts to the focus of the app
+        lbl = tk.Label(
+            self._tip, text=self.text, bg="#1F2937", fg="#F9FAFB",
+            font=("Segoe UI", 9, "bold"), padx=8, pady=4,
+            relief="flat", bd=0, highlightthickness=1, highlightbackground="#374151"
+        )
+        lbl.pack()
+
+    def _move(self, event):
+        # Keep the tooltip following the cursor if it's already showing
+        if self._tip is not None:
+            x = self.widget.winfo_rootx() + 12
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+            self._tip.wm_geometry(f"+{x}+{y}")
+
+    def _hide(self, event=None):
+        self._cancel()
+        if self._tip is not None:
+            self._tip.destroy()
+            self._tip = None
+
+    def _cancel(self):
+        if self._after_id is not None:
+            self.widget.after_cancel(self._after_id)
+            self._after_id = None
 
 class SnippingToolApp:
     def __init__(self, root):
@@ -41,9 +97,12 @@ class SnippingToolApp:
             except Exception:
                 pass
                 
-        # Start compact horizontal launcher pill - expanded to 900px to fit tools neatly
-        self.root.geometry("900x102")
+        # Start compact horizontal launcher pill - reduced width to fit tools cleanly and compactly
+        self.root.geometry("480x102")
         self.root.resizable(True, True)
+
+        # Fullscreen editing mode (enabled automatically after a capture, toggled with F11)
+        self._fullscreen = False
         
         # Load configuration settings
         self.config = AppConfig()
@@ -79,6 +138,10 @@ class SnippingToolApp:
         self.root.bind("<Control-c>", lambda e: self.copy_to_clipboard())
         self.root.bind("<Control-Shift-S>", lambda e: self.save_as())
         self.root.bind("<Control-n>", lambda e: self.start_capture())
+
+        # Fullscreen toggle (F11) and exit (Esc) so the post-capture fullscreen view isn't a trap
+        self.root.bind("<F11>", self.toggle_fullscreen)
+        self.root.bind("<Escape>", self.exit_fullscreen)
         
         # Start global hotkey listener
         self.start_global_hotkey_listener()
@@ -184,7 +247,7 @@ class SnippingToolApp:
             self.update_theme_recursively(child)
 
     def build_ui(self):
-        """Builds the compact horizontal toolbar with Arial typography."""
+        """Builds the compact horizontal toolbar with Segoe UI typography."""
         # Top toolbar border container (Fluent floating design)
         self.toolbar_border_frame = tk.Frame(self.root, bg=self.border_color)
         self.toolbar_border_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(10, 0))
@@ -195,10 +258,28 @@ class SnippingToolApp:
         self.toolbar_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         self.toolbar_frame.pack_propagate(False)
         
-        # --- LEFT: Launch & Mode ---
+        # --- LEFT: Brand + Launch & Mode ---
         left_grp = tk.Frame(self.toolbar_frame, bg=self.panel_bg)
         left_grp.pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        
+
+        # Brand mark: small app logo + wordmark for a distinctive identity
+        brand_path = os.path.join(os.path.dirname(__file__), "SnippingTool.png")
+        self.brand_logo_tk = None
+        if os.path.exists(brand_path):
+            try:
+                brand_img = Image.open(brand_path).convert("RGBA").resize((22, 22), Image.Resampling.LANCZOS)
+                self.brand_logo_tk = ImageTk.PhotoImage(brand_img)
+            except Exception:
+                self.brand_logo_tk = None
+        if self.brand_logo_tk:
+            lbl_brand_logo = tk.Label(left_grp, image=self.brand_logo_tk, bg=self.panel_bg)
+            lbl_brand_logo.pack(side=tk.LEFT, padx=(0, 3), pady=8)
+        self.lbl_brand = tk.Label(
+            left_grp, text="Snipping Tool", bg=self.panel_bg, fg=self.text_color,
+            font=("Segoe UI", 9, "bold")
+        )
+        self.lbl_brand.pack(side=tk.LEFT, padx=(0, 8), pady=8)
+
         # New Crop button with white icon on active Cobalt background
         self.icon_camera = get_icon("camera", "#FFFFFF", size=(20, 20))
         self.btn_new = tk.Button(
@@ -254,7 +335,7 @@ class SnippingToolApp:
         ]
         
         for tool_name, icon_name, tooltip in tools:
-            btn = self.make_icon_button(self.mid_grp, icon_name, lambda t=tool_name: self.set_tool(t))
+            btn = self.make_icon_button(self.mid_grp, icon_name, lambda t=tool_name: self.set_tool(t), tooltip=tooltip)
             btn.pack(side=tk.LEFT, padx=1, pady=5)
             self.tool_buttons[tool_name] = btn
             
@@ -331,20 +412,20 @@ class SnippingToolApp:
         self.right_grp = tk.Frame(self.toolbar_frame, bg=self.panel_bg)
         self.right_grp.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
         
-        self.btn_settings = self.make_icon_button(self.right_grp, "settings", self.open_settings_dialog)
+        self.btn_settings = self.make_icon_button(self.right_grp, "settings", self.open_settings_dialog, tooltip="Preferences")
         self.btn_settings.pack(side=tk.RIGHT, padx=1, pady=5)
         
         div4 = tk.Frame(self.right_grp, bg=self.border_color, width=1)
         div4.pack(side=tk.RIGHT, fill=tk.Y, padx=4, pady=6)
         div4.is_divider = True
         
-        self.btn_save_as = self.make_icon_button(self.right_grp, "save", self.save_as)
+        self.btn_save_as = self.make_icon_button(self.right_grp, "save", self.save_as, tooltip="Save As (Ctrl+Shift+S)")
         self.btn_save_as.pack(side=tk.RIGHT, padx=1, pady=5)
-        
-        self.btn_copy = self.make_icon_button(self.right_grp, "copy", self.copy_to_clipboard)
+
+        self.btn_copy = self.make_icon_button(self.right_grp, "copy", self.copy_to_clipboard, tooltip="Copy to Clipboard (Ctrl+C)")
         self.btn_copy.pack(side=tk.RIGHT, padx=1, pady=5)
-        
-        self.btn_clear = self.make_icon_button(self.right_grp, "clear", self.clear_canvas)
+
+        self.btn_clear = self.make_icon_button(self.right_grp, "clear", self.clear_canvas, tooltip="Clear / Reset Workspace")
         self.btn_clear.pack(side=tk.RIGHT, padx=1, pady=5)
         
         div5 = tk.Frame(self.right_grp, bg=self.border_color, width=1)
@@ -352,20 +433,20 @@ class SnippingToolApp:
         div5.is_divider = True
         
         # Zoom Controls
-        self.btn_zoom_in = self.make_icon_button(self.right_grp, "zoom_in", self.zoom_in)
+        self.btn_zoom_in = self.make_icon_button(self.right_grp, "zoom_in", self.zoom_in, tooltip="Zoom In (Ctrl+Scroll)")
         self.btn_zoom_in.pack(side=tk.RIGHT, padx=1, pady=5)
-        
-        self.btn_zoom_out = self.make_icon_button(self.right_grp, "zoom_out", self.zoom_out)
+
+        self.btn_zoom_out = self.make_icon_button(self.right_grp, "zoom_out", self.zoom_out, tooltip="Zoom Out (Ctrl+Scroll)")
         self.btn_zoom_out.pack(side=tk.RIGHT, padx=1, pady=5)
         
         div_z = tk.Frame(self.right_grp, bg=self.border_color, width=1)
         div_z.pack(side=tk.RIGHT, fill=tk.Y, padx=4, pady=6)
         div_z.is_divider = True
         
-        self.btn_redo = self.make_icon_button(self.right_grp, "redo", self.redo)
+        self.btn_redo = self.make_icon_button(self.right_grp, "redo", self.redo, tooltip="Redo (Ctrl+Y)")
         self.btn_redo.pack(side=tk.RIGHT, padx=1, pady=5)
-        
-        self.btn_undo = self.make_icon_button(self.right_grp, "undo", self.undo)
+
+        self.btn_undo = self.make_icon_button(self.right_grp, "undo", self.undo, tooltip="Undo (Ctrl+Z)")
         self.btn_undo.pack(side=tk.RIGHT, padx=1, pady=5)
         
         # Center Canvas Editor Frame
@@ -412,8 +493,9 @@ class SnippingToolApp:
     def get_btn_img(self, button, state):
         """Helper to get button image for a specific state ('normal', 'hover', 'active')."""
         icon_name = button.icon_name
-        icon_col = "#333333" if self.theme_name == "light" else "#DDDDDD"
-        
+        # Theme-matched glyph color: deep charcoal on Light, soft white on Dark.
+        icon_col = self.text_color if self.theme_name == "light" else "#E5E7EB"
+
         if state == "active":
             bg = self.active_tool_bg
             border = self.accent_color
@@ -424,16 +506,18 @@ class SnippingToolApp:
         else:
             bg = self.panel_bg
             border = None
-            
+
         return get_button_image(icon_name, icon_col, bg, border, size=(34, 34), icon_size=(20, 20))
 
-    def make_icon_button(self, parent, icon_name, command):
+    def make_icon_button(self, parent, icon_name, command, tooltip=None):
         """Builds a flat button styled dynamically based on theme icons."""
         btn = tk.Button(
             parent, command=command, bg=self.panel_bg,
             activebackground=self.panel_bg, bd=0, relief="flat", highlightthickness=0
         )
         btn.icon_name = icon_name
+        if tooltip:
+            ToolTip(btn, tooltip)
         
         img_normal = self.get_btn_img(btn, "normal")
         btn.config(image=img_normal)
@@ -525,7 +609,7 @@ class SnippingToolApp:
         elif tool_name == "text":
             self.lbl_status_tool.config(text="TOOL: TEXT (CLICK CANVAS TO TYPE / CLICK TEXT TO EDIT)")
         elif tool_name == "crop":
-            self.lbl_status_tool.config(text="TOOL: CROP (DRAG BOX & RELEASE TO CROP)")
+            self.lbl_status_tool.config(text="TOOL: CROP (DRAG A BOX, ADJUST IT, THEN CLICK 'CROP' TO APPLY)")
         else:
             self.lbl_status_tool.config(text=f"TOOL: {tool_name.upper()}")
         
@@ -591,11 +675,13 @@ class SnippingToolApp:
     def on_capture_complete(self, image):
         if image:
             self.canvas_editor.set_image(image)
-            self.on_crop_complete(image.width, image.height)
-            
             self.update_toolbar_state()
             self.update_actions_buttons_state()
-            
+
+            # Open the editor maximized so the snip gets maximum workspace.
+            self.root.state('zoomed')
+
+            self.on_crop_complete(image.width, image.height)
             self.root.lift()
             self.root.focus_force()
 
@@ -666,9 +752,26 @@ class SnippingToolApp:
     def on_crop_complete(self, w, h):
         self.lbl_status_dims.config(text=f"RESOLUTION: {w} x {h} PX")
         self.lbl_status_zoom.config(text=f"ZOOM: {int(round(self.canvas_editor.zoom_factor * 100))}%")
-        win_w = max(900, w + 30)
-        win_h = h + 138
-        self.root.geometry(f"{win_w}x{win_h}")
+        if not self._fullscreen and self.root.state() != 'zoomed':
+            win_w = max(900, w + 30)
+            win_h = h + 138
+            self.root.geometry(f"{win_w}x{win_h}")
+
+    def set_fullscreen(self, on):
+        """Toggles true fullscreen on the main window."""
+        self._fullscreen = bool(on)
+        self.root.attributes("-fullscreen", self._fullscreen)
+
+    def toggle_fullscreen(self, event=None):
+        """F11 handler: flips in and out of fullscreen."""
+        self.set_fullscreen(not self._fullscreen)
+        return "break"
+
+    def exit_fullscreen(self, event=None):
+        """Esc handler: only leaves fullscreen (doesn't interfere elsewhere)."""
+        if self._fullscreen:
+            self.set_fullscreen(False)
+        return "break"
 
     def undo(self):
         self.canvas_editor.undo()
@@ -684,9 +787,16 @@ class SnippingToolApp:
         self.canvas_editor.base_image = None
         self.canvas_editor.history.clear()
         self.canvas_editor.redo_stack.clear()
+        self.canvas_editor.selected_index = None
+        self.canvas_editor._grid_cache = None
+        self.canvas_editor._baked_cache = None
+        self.canvas_editor._display_photo = None
+        self.canvas_editor._reset_crop_state()
         self.canvas_editor.redraw()
-        
-        self.root.geometry("900x102")
+
+        self.set_fullscreen(False)
+        self.root.state('normal')
+        self.root.geometry("480x102")
         self.lbl_status_dims.config(text="RESOLUTION: 0 x 0 PX")
         self.lbl_status_zoom.config(text="ZOOM: 100%")
         self.update_toolbar_state()
@@ -834,6 +944,7 @@ class SnippingToolApp:
             
         edited_image = self.canvas_editor.get_edited_image()
         if edited_image:
+            clipboard_opened = False
             try:
                 import io
                 import ctypes
@@ -844,23 +955,48 @@ class SnippingToolApp:
                 data = output.getvalue()[14:]
                 output.close()
                 
-                ctypes.windll.user32.OpenClipboard(None)
-                ctypes.windll.user32.EmptyClipboard()
+                # Configure ctypes signatures for 64-bit safety
+                kernel32 = ctypes.windll.kernel32
+                user32 = ctypes.windll.user32
                 
-                CF_DIB = 8
-                hglb = ctypes.windll.kernel32.GlobalAlloc(2, len(data)) # GMEM_MOVEABLE = 2
-                p_box = ctypes.windll.kernel32.GlobalLock(hglb)
-                ctypes.memmove(p_box, data, len(data))
-                ctypes.windll.kernel32.GlobalUnlock(hglb)
+                kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+                kernel32.GlobalAlloc.restype = ctypes.c_void_p
                 
-                ctypes.windll.user32.SetClipboardData(CF_DIB, hglb)
-                ctypes.windll.user32.CloseClipboard()
+                kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+                kernel32.GlobalLock.restype = ctypes.c_void_p
                 
-                orig_text = self.lbl_status_path.cget("text")
-                self.lbl_status_path.config(text="COPIED TO CLIPBOARD!", fg=self.accent_color)
-                self.root.after(3000, lambda: self.lbl_status_path.config(text=orig_text, fg=self.text_muted))
+                kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+                kernel32.GlobalUnlock.restype = ctypes.c_int
+                
+                user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+                user32.SetClipboardData.restype = ctypes.c_void_p
+                
+                if user32.OpenClipboard(None):
+                    clipboard_opened = True
+                    user32.EmptyClipboard()
+                    
+                    CF_DIB = 8
+                    hglb = kernel32.GlobalAlloc(2, len(data)) # GMEM_MOVEABLE = 2
+                    if hglb:
+                        p_box = kernel32.GlobalLock(hglb)
+                        if p_box:
+                            ctypes.memmove(p_box, data, len(data))
+                            kernel32.GlobalUnlock(hglb)
+                            user32.SetClipboardData(CF_DIB, hglb)
+                    
+                    orig_text = self.lbl_status_path.cget("text")
+                    self.lbl_status_path.config(text="COPIED TO CLIPBOARD!", fg=self.accent_color)
+                    self.root.after(3000, lambda: self.lbl_status_path.config(text=orig_text, fg=self.text_muted))
+                else:
+                    raise RuntimeError("Could not open Windows clipboard.")
             except Exception as e:
                 messagebox.showerror("Clipboard Error", f"Failed to copy to clipboard:\n{e}")
+            finally:
+                if clipboard_opened:
+                    try:
+                        ctypes.windll.user32.CloseClipboard()
+                    except:
+                        pass
 
     def open_settings_dialog(self):
         dialog = tk.Toplevel(self.root)
