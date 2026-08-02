@@ -113,6 +113,7 @@ class SnippingToolApp:
         self.font_title = ("Segoe UI", 10, "bold")
         self.font_status = ("Segoe UI", 8, "bold")
         self.font_status_italic = ("Segoe UI", 8, "italic")
+        self.font_data = ("Consolas", 9, "bold")  # instrument-style coordinate/status readout (DESIGN.md)
         
         # Load dynamic theme colors from config
         self.apply_theme_tokens()
@@ -468,16 +469,16 @@ class SnippingToolApp:
         self.status_bar.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         self.status_bar.pack_propagate(False)
         
-        self.lbl_status_tool = tk.Label(self.status_bar, text="TOOL: PENCIL", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
+        self.lbl_status_tool = tk.Label(self.status_bar, text="TOOL: PENCIL", bg=self.panel_bg, fg=self.text_color, font=self.font_data)
         self.lbl_status_tool.pack(side=tk.LEFT, padx=15, pady=3)
-        
-        self.lbl_status_zoom = tk.Label(self.status_bar, text="ZOOM: 100%", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
+
+        self.lbl_status_zoom = tk.Label(self.status_bar, text="ZOOM: 100%", bg=self.panel_bg, fg=self.text_color, font=self.font_data)
         self.lbl_status_zoom.pack(side=tk.LEFT, padx=20, pady=3)
-        
-        self.lbl_status_dims = tk.Label(self.status_bar, text="RESOLUTION: 0 x 0 PX", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
+
+        self.lbl_status_dims = tk.Label(self.status_bar, text="RESOLUTION: 0 x 0 PX", bg=self.panel_bg, fg=self.text_color, font=self.font_data)
         self.lbl_status_dims.pack(side=tk.LEFT, padx=20, pady=3)
-        
-        self.lbl_status_coords = tk.Label(self.status_bar, text="COORDS: 0, 0", bg=self.panel_bg, fg=self.text_color, font=self.font_bold)
+
+        self.lbl_status_coords = tk.Label(self.status_bar, text="COORDS: 0, 0", bg=self.panel_bg, fg=self.text_color, font=self.font_data)
         self.lbl_status_coords.pack(side=tk.LEFT, padx=20, pady=3)
         
         self.lbl_status_path = tk.Label(

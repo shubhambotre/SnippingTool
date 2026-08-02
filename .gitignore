@@ -1,4 +1,4 @@
-.agents/
+/.agents/
 __pycache__/
 *.pyc
 .custom_snipping_tool_config.json
@@ -6,3 +6,4 @@ __pycache__/
 *.diff
 _icon_sheet.png
 skills-lock.json
+DESIGN.md
