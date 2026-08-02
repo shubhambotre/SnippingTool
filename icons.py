@@ -43,11 +43,6 @@ MDI_ICONS["select"] = MDI_ICONS["pointer"]
 # be rasterized with an even-odd (parity) fill — reproducing MDI hole shapes
 # (e.g. the donut rings in "circle"/"zoom" and the lens cut-out in "camera").
 # ---------------------------------------------------------------------------
-def _tokenize(path_d):
-    """Return the SVG numeric tokens of a path in order of appearance."""
-    return re.findall(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?", path_d)
-
-
 def _sample_cubic(x0, y0, x1, y1, x2, y2, x3, y3, steps):
     pts = []
     for k in range(1, steps + 1):

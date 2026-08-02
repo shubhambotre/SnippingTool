@@ -8,6 +8,12 @@ from PIL import Image, ImageDraw, ImageTk, ImageFont
 # Cap undo history so long editing sessions (heavy pencil strokes) don't grow memory unboundedly.
 HISTORY_LIMIT = 500
 
+# Highlighter is always rendered at this fixed stroke width (both live preview and bake).
+HIGHLIGHTER_WIDTH = 18
+
+# Estimate rendered text width as CHARS x (font_size * factor) for hit-testing, handles, and bbox.
+TEXT_CHAR_WIDTH_FACTOR = 0.6
+
 def get_pillow_font(family, size=None):
     """Loads the requested font family and size from Windows Fonts, or falls back to Arial Bold."""
     if size is None:
@@ -56,7 +62,6 @@ class CanvasEditor(tk.Frame):
         
         # Image containers
         self.base_image = None
-        self.current_display_image = None
         self.bg_image_tk = None
         self.bg_image_id = None
         
@@ -334,7 +339,7 @@ class CanvasEditor(tk.Frame):
         elif t == "text":
             x, y = action["coords"]
             font_size = action["font_size"]
-            text_w = len(action["text"]) * (font_size * 0.6)
+            text_w = len(action["text"]) * (font_size * TEXT_CHAR_WIDTH_FACTOR)
             text_h = font_size
             cxm = x + text_w / 2
             cym = y + text_h / 2
@@ -489,7 +494,7 @@ class CanvasEditor(tk.Frame):
                 elif t == "text":
                     x, y = action["coords"]
                     text_h = action["font_size"]
-                    text_w = len(action["text"]) * (action["font_size"] * 0.6)
+                    text_w = len(action["text"]) * (action["font_size"] * TEXT_CHAR_WIDTH_FACTOR)
                     if x - 10 <= self.start_x <= x + text_w + 10 and y - 10 <= self.start_y <= y + text_h + 10:
                         intersect = True
                         
@@ -515,7 +520,7 @@ class CanvasEditor(tk.Frame):
                 if action["type"] == "text":
                     ax, ay = action["coords"]
                     text_h = action["font_size"]
-                    text_w = len(action["text"]) * (action["font_size"] * 0.6)
+                    text_w = len(action["text"]) * (action["font_size"] * TEXT_CHAR_WIDTH_FACTOR)
                     
                     if ax - 10 <= self.start_x <= ax + text_w + 10 and ay - 10 <= self.start_y <= ay + text_h + 10:
                         editing_index = idx
@@ -581,7 +586,7 @@ class CanvasEditor(tk.Frame):
                         ox, oy = self.drag_start_action["coords"]
                         ofs = self.drag_start_action["font_size"]
                         otext = self.drag_start_action["text"]
-                        otext_w = len(otext) * (ofs * 0.6)
+                        otext_w = len(otext) * (ofs * TEXT_CHAR_WIDTH_FACTOR)
                         otext_h = ofs
                         
                         if self.active_handle in ("BR", "R", "B"):
@@ -611,7 +616,7 @@ class CanvasEditor(tk.Frame):
                                 scale = max(scale_w, scale_h)
                             scale = max(0.1, scale)
                             action["font_size"] = max(6, min(120, int(round(ofs * scale))))
-                            new_text_w = len(otext) * (action["font_size"] * 0.6)
+                            new_text_w = len(otext) * (action["font_size"] * TEXT_CHAR_WIDTH_FACTOR)
                             action["coords"] = (ox + otext_w - new_text_w, oy)
                         elif self.active_handle in ("TR", "T"):
                             if self.active_handle == "T":
@@ -634,7 +639,7 @@ class CanvasEditor(tk.Frame):
                             scale_h = current_h / otext_h if otext_h > 0 else 1.0
                             scale = max(0.1, max(scale_w, scale_h))
                             action["font_size"] = max(6, min(120, int(round(ofs * scale))))
-                            new_text_w = len(otext) * (action["font_size"] * 0.6)
+                            new_text_w = len(otext) * (action["font_size"] * TEXT_CHAR_WIDTH_FACTOR)
                             new_text_h = action["font_size"]
                             action["coords"] = (ox + otext_w - new_text_w, oy + otext_h - new_text_h)
                             
@@ -695,8 +700,8 @@ class CanvasEditor(tk.Frame):
             
         elif self.tool in ("pencil", "highlighter"):
             color = "#FFCC00" if self.tool == "highlighter" else self.color
-            # Must match the baked width in get_edited_image so preview == exported stroke
-            thickness = 18 if self.tool == "highlighter" else self.thickness
+            # Must match the baked width in _draw_action so preview == exported stroke
+            thickness = HIGHLIGHTER_WIDTH if self.tool == "highlighter" else self.thickness
             
             x_prev, y_prev = self.pencil_points[-1]
             seg_id = self.canvas.create_line(
@@ -1370,7 +1375,10 @@ class CanvasEditor(tk.Frame):
         self.redraw()
 
     def _adjust_crop(self, cx, cy):
-        x1, y1, x2, y2 = self.crop_rect
+        # Anchor to the region as it was when the drag started (snapshot taken in on_press),
+        # then apply the full delta from the press point. Otherwise re-applying the delta to
+        # the already-mutated crop_rect on each motion would accumulate/run away.
+        x1, y1, x2, y2 = self.drag_start_action if self.drag_start_action is not None else self.crop_rect
         w_img, h_img = self.base_image.size
         cx = max(0, min(cx, w_img))
         cy = max(0, min(cy, h_img))
@@ -1400,7 +1408,7 @@ class CanvasEditor(tk.Frame):
 
         if t == "highlighter":
             pts = [(p[0] - offx, p[1] - offy) for p in action["points"]]
-            draw.line(pts, fill=(255, 204, 0, 100), width=18, joint="curve")
+            draw.line(pts, fill=(255, 204, 0, 100), width=HIGHLIGHTER_WIDTH, joint="curve")
             return
         if t == "pencil":
             pts = [(p[0] - offx, p[1] - offy) for p in action["points"]]
@@ -1490,7 +1498,7 @@ class CanvasEditor(tk.Frame):
             return min(x1, x2) - pad, min(y1, y2) - pad, max(x1, x2) + pad, max(y1, y2) + pad
         if t == "text":
             x, y = action["coords"]
-            tw = len(action["text"]) * (action["font_size"] * 0.6)
+            tw = len(action["text"]) * (action["font_size"] * TEXT_CHAR_WIDTH_FACTOR)
             return x - pad, y - pad, x + tw + pad, y + action["font_size"] + pad
         pts = action["points"]
         xs = [p[0] for p in pts]

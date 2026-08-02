@@ -974,19 +974,27 @@ class SnippingToolApp:
                 if user32.OpenClipboard(None):
                     clipboard_opened = True
                     user32.EmptyClipboard()
-                    
+
                     CF_DIB = 8
                     hglb = kernel32.GlobalAlloc(2, len(data)) # GMEM_MOVEABLE = 2
-                    if hglb:
-                        p_box = kernel32.GlobalLock(hglb)
-                        if p_box:
-                            ctypes.memmove(p_box, data, len(data))
-                            kernel32.GlobalUnlock(hglb)
-                            user32.SetClipboardData(CF_DIB, hglb)
-                    
-                    orig_text = self.lbl_status_path.cget("text")
-                    self.lbl_status_path.config(text="COPIED TO CLIPBOARD!", fg=self.accent_color)
-                    self.root.after(3000, lambda: self.lbl_status_path.config(text=orig_text, fg=self.text_muted))
+                    copied = False
+                    if not hglb:
+                        raise RuntimeError("Failed to allocate clipboard memory.")
+                    p_box = kernel32.GlobalLock(hglb)
+                    if not p_box:
+                        kernel32.GlobalFree(hglb)
+                        raise RuntimeError("Could not lock clipboard memory.")
+                    ctypes.memmove(p_box, data, len(data))
+                    kernel32.GlobalUnlock(hglb)
+                    # On success the clipboard takes ownership of hglb; only free it on failure.
+                    copied = bool(user32.SetClipboardData(CF_DIB, hglb))
+                    if not copied:
+                        kernel32.GlobalFree(hglb)
+
+                    if copied:
+                        orig_text = self.lbl_status_path.cget("text")
+                        self.lbl_status_path.config(text="COPIED TO CLIPBOARD!", fg=self.accent_color)
+                        self.root.after(3000, lambda: self.lbl_status_path.config(text=orig_text, fg=self.text_muted))
                 else:
                     raise RuntimeError("Could not open Windows clipboard.")
             except Exception as e:

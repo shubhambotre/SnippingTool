@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .custom_snipping_tool_config.json
+.claude/
+*.diff
+_icon_sheet.png
+skills-lock.json
