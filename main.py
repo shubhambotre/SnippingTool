@@ -11,6 +11,7 @@ from config import AppConfig
 from capture import CaptureOverlay
 from canvas_editor import CanvasEditor
 from icons import get_icon, get_button_image
+from collage_editor import CollageEditorDialog
 
 class StyledEntry(tk.Entry):
     """Custom flat entry widget with dynamic themes and Segoe UI typography."""
@@ -423,6 +424,9 @@ class SnippingToolApp:
         self.btn_save_as = self.make_icon_button(self.right_grp, "save", self.save_as, tooltip="Save As (Ctrl+Shift+S)")
         self.btn_save_as.pack(side=tk.RIGHT, padx=1, pady=5)
 
+        self.btn_collage = self.make_icon_button(self.right_grp, "collage", self.open_collage_editor, tooltip="Photo Collage Editor")
+        # Collage button is shown/hidden by update_toolbar_state based on whether an image is loaded
+
         self.btn_copy = self.make_icon_button(self.right_grp, "copy", self.copy_to_clipboard, tooltip="Copy to Clipboard (Ctrl+C)")
         self.btn_copy.pack(side=tk.RIGHT, padx=1, pady=5)
 
@@ -550,6 +554,7 @@ class SnippingToolApp:
         for button in [
             self.btn_settings,
             self.btn_save_as,
+            self.btn_collage,
             self.btn_copy,
             self.btn_clear,
             self.btn_zoom_in,
@@ -672,6 +677,32 @@ class SnippingToolApp:
                 return
                 
         CaptureOverlay(self.root, mode=mode, fixed_width=w, fixed_height=h, callback=self.on_capture_complete)
+
+    def open_collage_editor(self):
+        """Opens the Photo Collage Editor dialog with the current snip pre-loaded."""
+        theme_colors = {
+            "bg_color":     self.bg_color,
+            "panel_bg":     self.panel_bg,
+            "accent_color": self.accent_color,
+            "btn_bg":       self.btn_bg,
+            "border_color": self.border_color,
+            "text_color":   self.text_color,
+            "text_muted":   self.text_muted,
+            "canvas_bg":    self.canvas_bg,
+            "theme_name":   self.theme_name,
+        }
+        # Pass the current annotated image (if any) as the first cell
+        initial_image = None
+        if self.canvas_editor.base_image:
+            initial_image = self.canvas_editor.get_edited_image()
+
+        CollageEditorDialog(
+            self.root,
+            theme_colors=theme_colors,
+            initial_image=initial_image,
+            result_callback=self.on_capture_complete,
+            root_window=self.root,
+        )
 
     def on_capture_complete(self, image):
         if image:
@@ -814,6 +845,7 @@ class SnippingToolApp:
             self.btn_zoom_in.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_zoom_out.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_copy.pack(side=tk.RIGHT, padx=1, pady=5)
+            self.btn_collage.pack(side=tk.RIGHT, padx=1, pady=5)
             self.btn_save_as.pack(side=tk.RIGHT, padx=1, pady=5)
         else:
             self.mid_grp.pack_forget()
@@ -823,6 +855,7 @@ class SnippingToolApp:
             self.btn_zoom_in.pack_forget()
             self.btn_zoom_out.pack_forget()
             self.btn_copy.pack_forget()
+            self.btn_collage.pack_forget()
             self.btn_save_as.pack_forget()
 
     def update_actions_buttons_state(self):
