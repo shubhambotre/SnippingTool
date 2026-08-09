@@ -763,11 +763,7 @@ class SnippingToolApp:
             # Register the hotkey: Shift + Print Screen
             # Passing None as hwnd registers a thread-specific hotkey.
             if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_SHIFT, VK_SNAPSHOT):
-                err = ctypes.GetLastError()
-                if err in (1409, 1422):  # 1409 = ERROR_HOTKEY_ALREADY_REGISTERED
-                    print("Note: Global Shift + Print Screen hotkey is already in use by another process or instance.")
-                else:
-                    print(f"Note: Could not register global Shift + Print Screen hotkey (Error Code: {err}).")
+                # If already registered by another running instance/app, exit thread silently
                 return
                 
             try:
