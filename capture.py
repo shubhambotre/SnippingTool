@@ -1,281 +1,375 @@
-import tkinter as tk
+import sys
 import time
 import os
 import ctypes
-from PIL import Image, ImageGrab, ImageTk, ImageEnhance
+from PIL import Image, ImageGrab, ImageEnhance
+from PySide6.QtCore import Qt, QRect, QPoint, QRectF
+from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPixmap, QImage, QCursor, QKeySequence, QBrush
+from PySide6.QtWidgets import QWidget, QApplication, QMainWindow
 
-# Enable DPI awareness on Windows to prevent resolution mismatch
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2) # PROCESS_PER_MONITOR_DPI_AWARE
-except Exception:
-    try:
-        ctypes.windll.user32.SetProcessDPIAware()
-    except Exception:
-        pass
+def pil_to_qpixmap(pil_img):
+    """Converts a PIL RGBA Image to a PySide6 QPixmap."""
+    if pil_img.mode != "RGBA":
+        pil_img = pil_img.convert("RGBA")
+    data = pil_img.tobytes("raw", "RGBA")
+    qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format.Format_RGBA8888)
+    return QPixmap.fromImage(qimg)
 
-class CaptureOverlay:
-    def __init__(self, root, mode="free", fixed_width=800, fixed_height=600, callback=None):
-        self.root = root
+def qimage_to_pil(qimg):
+    """Converts a PySide6 QImage to a PIL Image."""
+    qimg = qimg.convertToFormat(QImage.Format.Format_RGBA8888)
+    width = qimg.width()
+    height = qimg.height()
+    ptr = qimg.constBits()
+    bpl = qimg.bytesPerLine()
+    data = bytes(ptr)
+    return Image.frombytes("RGBA", (width, height), data, "raw", "RGBA", bpl, 1)
+
+
+class CaptureOverlay(QWidget):
+    def __init__(self, main_window, mode="free", fixed_width=800, fixed_height=600, callback=None):
+        super().__init__(None)
+        self.main_window = main_window
         self.mode = mode
         self.fixed_width = fixed_width
         self.fixed_height = fixed_height
         self.callback = callback
-        
+
         self.original_image = None
         self.darkened_image = None
-        self.darkened_tk = None
-        
-        self.crop_image_id = None
-        self.crop_tk = None
-        
-        self.start_x = None
-        self.start_y = None
+        self.original_pixmap = None
+        self.darkened_pixmap = None
         self.captured_image = None
 
-        # Colors for the HUD overlay (Precision Cyan)
-        self.hud_color = "#00E5FF"
-        self.hud_bg = "#0E1013"
+        self.start_pos = None
+        self.current_pos = None
+        self.is_selecting = False
 
-        # Hide the main window
-        self.root.withdraw()
-        self.root.update()
-        
-        # Brief pause to allow the window to fade out
-        time.sleep(0.35)
-        
-        # Grab screen
+        self.hud_color = QColor("#00E5FF")
+        self.hud_bg = QColor("#0E1013")
+
+        # Hide main window briefly
+        if self.main_window:
+            self.main_window.hide()
+        QApplication.processEvents()
+        time.sleep(0.15)
+        QApplication.processEvents()
+
+        # Grab full desktop screenshot
         self.take_screenshot()
-        
-        # Create overlay window
-        self.overlay = tk.Toplevel(self.root)
-        self.overlay.attributes("-fullscreen", True)
-        self.overlay.attributes("-topmost", True)
-        # Disable default Windows cursor to draw our custom crosshair reticle
-        self.overlay.config(cursor="none")
-        
-        # Canvas to display screenshot and handle selections
-        self.canvas = tk.Canvas(self.overlay, highlightthickness=0)
-        self.canvas.pack(fill=tk.BOTH, expand=tk.YES)
-        
-        # Draw background image (darkened)
-        self.darkened_tk = ImageTk.PhotoImage(self.darkened_image)
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.darkened_tk)
-        
-        # Bind events
-        self.overlay.bind("<Escape>", self.cancel)
-        self.overlay.bind("<Motion>", self.on_mouse_move)
-        
-        if self.mode == "fixed":
-            self.overlay.bind("<Button-1>", self.capture_fixed_box)
-        else:
-            self.canvas.bind("<ButtonPress-1>", self.on_press)
-            self.canvas.bind("<B1-Motion>", self.on_drag)
-            self.canvas.bind("<ButtonRelease-1>", self.on_release)
+
+        # Configure window flags for frameless, topmost, fullscreen snip overlay
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.BlankCursor)
+
+        # Cover primary display geometry
+        screen = QApplication.primaryScreen()
+        if screen:
+            self.setGeometry(screen.geometry())
+        elif self.original_pixmap:
+            self.setGeometry(0, 0, self.original_pixmap.width(), self.original_pixmap.height())
+
+        self.showFullScreen()
+        self.activateWindow()
+        self.raise_()
+        self.setFocus()
 
     def take_screenshot(self):
-        """Grabs the current screen screen contents."""
+        """Grabs full screen content using ImageGrab or Qt screen grab as fallback."""
+        img = None
         try:
-            self.original_image = ImageGrab.grab(all_screens=True)
+            img = ImageGrab.grab(all_screens=True)
         except Exception:
-            self.original_image = ImageGrab.grab()
-            
-        # Create a darkened version of the image
+            try:
+                img = ImageGrab.grab()
+            except Exception:
+                img = None
+
+        if img:
+            self.original_image = img
+            self.original_pixmap = pil_to_qpixmap(self.original_image)
+        else:
+            pixmap = None
+            try:
+                screen = QApplication.primaryScreen()
+                if screen:
+                    pixmap = screen.grabWindow(0)
+            except Exception:
+                pixmap = None
+
+            if pixmap and not pixmap.isNull():
+                self.original_pixmap = pixmap
+                self.original_image = qimage_to_pil(pixmap.toImage())
+            else:
+                # Emergency fallback: white canvas
+                self.original_image = Image.new("RGBA", (1920, 1080), (255, 255, 255, 255))
+                self.original_pixmap = pil_to_qpixmap(self.original_image)
+
+        # Create darkened image for overlay background
         enhancer = ImageEnhance.Brightness(self.original_image)
-        self.darkened_image = enhancer.enhance(0.4) # Slightly darker for higher contrast overlay
+        self.darkened_image = enhancer.enhance(0.4)
+        self.darkened_pixmap = pil_to_qpixmap(self.darkened_image)
 
-    def draw_hud_elements(self, cx, cy):
-        """Draws the viewfinder crosshair and coordinates near the cursor."""
-        self.canvas.delete("hud")
-        
-        # 1. Custom crosshair reticle (with a gap in the center)
-        self.canvas.create_line(cx - 15, cy, cx - 4, cy, fill=self.hud_color, width=1, tags="hud")
-        self.canvas.create_line(cx + 4, cy, cx + 15, cy, fill=self.hud_color, width=1, tags="hud")
-        self.canvas.create_line(cx, cy - 15, cx, cy - 4, fill=self.hud_color, width=1, tags="hud")
-        self.canvas.create_line(cx, cy + 4, cx, cy + 15, fill=self.hud_color, width=1, tags="hud")
-        
-        # 2. Text readout box (X/Y coordinates)
-        coord_text = f"X:{cx:04d}\nY:{cy:04d}"
-        text_id = self.canvas.create_text(
-            cx + 18, cy + 18, text=coord_text, fill=self.hud_color, 
-            font=("Consolas", 8, "bold"), anchor=tk.NW, tags="hud"
-        )
-        
-        # Draw background capsule for text readability
-        try:
-            bbox = self.canvas.bbox(text_id)
-            bg_id = self.canvas.create_rectangle(
-                bbox[0] - 5, bbox[1] - 3, bbox[2] + 5, bbox[3] + 3,
-                fill=self.hud_bg, outline=self.hud_color, width=1, tags="hud"
-            )
-            self.canvas.tag_raise(text_id)
-        except Exception:
-            pass
+    def _get_scale_factors(self):
+        sw = max(1, self.width())
+        sh = max(1, self.height())
+        scale_x = self.original_image.width / float(sw)
+        scale_y = self.original_image.height / float(sh)
+        return scale_x, scale_y
 
-    def draw_crop_hud(self, x1, y1, x2, y2):
-        """Draws gridlines, border lines, and dimension labels for the selected crop box."""
-        self.canvas.delete("crop_ui")
-        
-        width = x2 - x1
-        height = y2 - y1
-        if width <= 0 or height <= 0:
-            return
-            
-        # 1. Border line (Cyan, dashed)
-        self.canvas.create_rectangle(
-            x1, y1, x2, y2, outline=self.hud_color, width=1.5, dash=(6, 4), tags="crop_ui"
-        )
-        
-        # 2. Rule of Thirds Gridlines (subtle dashes)
-        dx = width / 3
-        dy = height / 3
-        
-        # Vertical grids
-        self.canvas.create_line(x1 + dx, y1, x1 + dx, y2, fill=self.hud_color, dash=(2, 6), width=1, tags="crop_ui")
-        self.canvas.create_line(x1 + 2 * dx, y1, x1 + 2 * dx, y2, fill=self.hud_color, dash=(2, 6), width=1, tags="crop_ui")
-        
-        # Horizontal grids
-        self.canvas.create_line(x1, y1 + dy, x2, y1 + dy, fill=self.hud_color, dash=(2, 6), width=1, tags="crop_ui")
-        self.canvas.create_line(x1, y1 + 2 * dy, x2, y1 + 2 * dy, fill=self.hud_color, dash=(2, 6), width=1, tags="crop_ui")
-        
-        # 3. Dynamic Dimension label capsule on the top edge
-        dim_text = f" {width} x {height} px "
-        label_x = (x1 + x2) / 2
-        label_y = y1 - 16 if y1 > 30 else y1 + 16 # Adjust if too close to top edge
-        
-        lbl_id = self.canvas.create_text(
-            label_x, label_y, text=dim_text, fill=self.hud_color,
-            font=("Consolas", 9, "bold"), tags="crop_ui"
-        )
-        
-        try:
-            l_box = self.canvas.bbox(lbl_id)
-            self.canvas.create_rectangle(
-                l_box[0] - 6, l_box[1] - 3, l_box[2] + 6, l_box[3] + 3,
-                fill=self.hud_bg, outline=self.hud_color, width=1, tags="crop_ui"
-            )
-            self.canvas.tag_raise(lbl_id)
-        except Exception:
-            pass
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    def on_mouse_move(self, event):
-        """Called on cursor motion; manages reticle HUD and fixed-size preview."""
-        cx, cy = event.x, event.y
-        self.draw_hud_elements(cx, cy)
-        
+        # 1. Draw darkened full-screen background
+        painter.drawPixmap(self.rect(), self.darkened_pixmap)
+
+        mouse_pos = self.mapFromGlobal(QCursor.pos())
+        cx, cy = mouse_pos.x(), mouse_pos.y()
+
+        # Determine current selection bounding box
+        crop_rect = None
         if self.mode == "fixed":
             w, h = self.fixed_width, self.fixed_height
-            screen_w = self.original_image.width
-            screen_h = self.original_image.height
-            
-            # Position box centered at cursor, constrained within monitor
-            x1 = max(0, min(cx - w // 2, screen_w - w))
-            y1 = max(0, min(cy - h // 2, screen_h - h))
-            x2 = x1 + w
-            y2 = y1 + h
-            
-            # Render crop preview image
-            cropped = self.original_image.crop((x1, y1, x2, y2))
-            self.crop_tk = ImageTk.PhotoImage(cropped)
-            
-            if self.crop_image_id is not None:
-                self.canvas.itemconfig(self.crop_image_id, image=self.crop_tk)
-                self.canvas.coords(self.crop_image_id, x1, y1)
+            sw, sh = self.width(), self.height()
+            x1 = max(0, min(cx - w // 2, sw - w))
+            y1 = max(0, min(cy - h // 2, sh - h))
+            crop_rect = QRect(x1, y1, w, h)
+        elif self.start_pos and self.current_pos:
+            x1 = min(self.start_pos.x(), self.current_pos.x())
+            y1 = min(self.start_pos.y(), self.current_pos.y())
+            x2 = max(self.start_pos.x(), self.current_pos.x())
+            y2 = max(self.start_pos.y(), self.current_pos.y())
+            crop_rect = QRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
+
+        # 2. Draw clear (un-darkened) original image section inside crop box
+        if crop_rect and crop_rect.width() > 0 and crop_rect.height() > 0:
+            scale_x, scale_y = self._get_scale_factors()
+            src_x = int(round(crop_rect.x() * scale_x))
+            src_y = int(round(crop_rect.y() * scale_y))
+            src_w = int(round(crop_rect.width() * scale_x))
+            src_h = int(round(crop_rect.height() * scale_y))
+            src_rect = QRect(src_x, src_y, src_w, src_h)
+
+            painter.drawPixmap(crop_rect, self.original_pixmap, src_rect)
+
+            # Draw Crop HUD grid, border, and dimension tag
+            self.draw_crop_hud(painter, crop_rect)
+
+        # 3. Draw viewfinder crosshair and coordinate readout
+        self.draw_hud_reticle(painter, cx, cy)
+
+        # 4. Draw Top HUD Status Banner with Cancel button
+        self.draw_top_bar(painter)
+
+    def draw_hud_reticle(self, painter, cx, cy):
+        """Draws viewfinder crosshair lines and coordinate pill near cursor."""
+        pen = QPen(self.hud_color, 1.2)
+        painter.setPen(pen)
+
+        # Crosshair lines with center gap
+        painter.drawLine(cx - 15, cy, cx - 4, cy)
+        painter.drawLine(cx + 4, cy, cx + 15, cy)
+        painter.drawLine(cx, cy - 15, cx, cy - 4)
+        painter.drawLine(cx, cy + 4, cx, cy + 15)
+
+        # Coordinate pill box
+        coord_text = f"X:{cx:04d}\nY:{cy:04d}"
+        font = QFont("Consolas", 8, QFont.Weight.Bold)
+        painter.setFont(font)
+
+        pill_rect = QRect(cx + 18, cy + 18, 56, 30)
+        painter.setBrush(QBrush(self.hud_bg))
+        painter.drawRoundedRect(pill_rect, 4, 4)
+        painter.setPen(QPen(self.hud_color))
+        painter.drawText(pill_rect, Qt.AlignmentFlag.AlignCenter, coord_text)
+
+    def draw_crop_hud(self, painter, rect):
+        """Draws dashed cyan border, rule-of-thirds grid, and dimension label."""
+        x1, y1, w, h = rect.x(), rect.y(), rect.width(), rect.height()
+
+        # Dashed border line
+        border_pen = QPen(self.hud_color, 1.5, Qt.PenStyle.DashLine)
+        painter.setPen(border_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(rect)
+
+        # Rule of Thirds gridlines
+        grid_pen = QPen(self.hud_color, 0.8, Qt.PenStyle.DotLine)
+        painter.setPen(grid_pen)
+
+        dx = w / 3.0
+        dy = h / 3.0
+        painter.drawLine(int(round(x1 + dx)), y1, int(round(x1 + dx)), y1 + h)
+        painter.drawLine(int(round(x1 + 2 * dx)), y1, int(round(x1 + 2 * dx)), y1 + h)
+        painter.drawLine(x1, int(round(y1 + dy)), x1 + w, int(round(y1 + dy)))
+        painter.drawLine(x1, int(round(y1 + 2 * dy)), x1 + w, int(round(y1 + 2 * dy)))
+
+        # Dimension pill tag
+        dim_text = f"{w} x {h} px"
+        font = QFont("Consolas", 9, QFont.Weight.Bold)
+        painter.setFont(font)
+
+        tag_w = 110
+        tag_h = 22
+        tag_x = int(round(x1 + (w - tag_w) / 2.0))
+        tag_y = y1 - 26 if y1 > 30 else y1 + h + 6
+
+        tag_rect = QRect(tag_x, tag_y, tag_w, tag_h)
+        painter.setPen(QPen(self.hud_color, 1))
+        painter.setBrush(QBrush(self.hud_bg))
+        painter.drawRoundedRect(tag_rect, 4, 4)
+
+        painter.setPen(QPen(self.hud_color))
+        painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, dim_text)
+
+    def draw_top_bar(self, painter):
+        """Draws top HUD banner with instructions and a clickable Cancel button."""
+        screen_w = self.width()
+        cx = screen_w // 2
+        cy = 28
+
+        pill_w = 480
+        pill_h = 38
+        x1 = cx - pill_w // 2
+        y1 = cy - pill_h // 2
+
+        container_rect = QRect(x1, y1, pill_w, pill_h)
+        painter.setPen(QPen(self.hud_color, 1.5))
+        painter.setBrush(QBrush(QColor("#0E1013")))
+        painter.drawRoundedRect(container_rect, 6, 6)
+
+        # Instructions text
+        painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        painter.setPen(QPen(QColor("#FFFFFF")))
+        text_rect = QRect(x1 + 16, y1, 350, pill_h)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "📷 CAPTURE MODE  •  Drag area to snip  •  Press ESC to exit")
+
+        # Cancel button rect
+        btn_w = 95
+        btn_h = pill_h - 8
+        btn_x = x1 + pill_w - btn_w - 6
+        btn_y = y1 + 4
+        self.cancel_btn_rect = QRect(btn_x, btn_y, btn_w, btn_h)
+
+        mouse_pos = self.mapFromGlobal(QCursor.pos())
+        is_hover = self.cancel_btn_rect.contains(mouse_pos)
+
+        btn_bg = QColor("#B71C1C") if is_hover else QColor("#D32F2F")
+        btn_border = QColor("#FFFFFF") if is_hover else QColor("#FF6B6B")
+
+        painter.setPen(QPen(btn_border, 1))
+        painter.setBrush(QBrush(btn_bg))
+        painter.drawRoundedRect(self.cancel_btn_rect, 4, 4)
+
+        painter.setPen(QPen(QColor("#FFFFFF")))
+        painter.drawText(self.cancel_btn_rect, Qt.AlignmentFlag.AlignCenter, "✕ CANCEL")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position().toPoint()
+
+            # Check if Cancel button in top HUD bar was clicked
+            if hasattr(self, 'cancel_btn_rect') and self.cancel_btn_rect.contains(pos):
+                self.cancel()
+                return
+
+            try:
+                self.grabMouse()
+            except Exception:
+                pass
+
+            if self.mode == "fixed":
+                w, h = self.fixed_width, self.fixed_height
+                sw, sh = self.width(), self.height()
+                x1 = max(0, min(pos.x() - w // 2, sw - w))
+                y1 = max(0, min(pos.y() - h // 2, sh - h))
+
+                if self.original_image:
+                    scale_x, scale_y = self._get_scale_factors()
+                    ix1 = max(0, int(round(x1 * scale_x)))
+                    iy1 = max(0, int(round(y1 * scale_y)))
+                    iw = int(round(w * scale_x))
+                    ih = int(round(h * scale_y))
+                    ix2 = min(self.original_image.width, ix1 + iw)
+                    iy2 = min(self.original_image.height, iy1 + ih)
+                    self.captured_image = self.original_image.crop((ix1, iy1, ix2, iy2))
+
+                self.close_overlay()
             else:
-                self.crop_image_id = self.canvas.create_image(x1, y1, anchor=tk.NW, image=self.crop_tk)
-                
-            self.draw_crop_hud(x1, y1, x2, y2)
-            
-            # Make sure HUD reticle stays on top of everything
-            self.canvas.tag_raise("crop_ui")
-            self.canvas.tag_raise("hud")
+                self.start_pos = pos
+                self.current_pos = pos
+                self.is_selecting = True
+                self.update()
 
-    def on_press(self, event):
-        self.start_x = event.x
-        self.start_y = event.y
+    def mouseMoveEvent(self, event):
+        pos = event.position().toPoint()
 
-    def on_drag(self, event):
-        if self.start_x is None or self.start_y is None:
-            return
-            
-        cur_x, cur_y = event.x, event.y
-        screen_w = self.original_image.width
-        screen_h = self.original_image.height
-        
-        cur_x = max(0, min(cur_x, screen_w))
-        cur_y = max(0, min(cur_y, screen_h))
-        
-        x1 = min(self.start_x, cur_x)
-        y1 = min(self.start_y, cur_y)
-        x2 = max(self.start_x, cur_x)
-        y2 = max(self.start_y, cur_y)
-        
-        # Render the viewfinder elements
-        self.draw_hud_elements(cur_x, cur_y)
-        
-        if (x2 - x1) > 0 and (y2 - y1) > 0:
-            # Crop clear image portion
-            cropped = self.original_image.crop((x1, y1, x2, y2))
-            self.crop_tk = ImageTk.PhotoImage(cropped)
-            
-            if self.crop_image_id is not None:
-                self.canvas.itemconfig(self.crop_image_id, image=self.crop_tk)
-                self.canvas.coords(self.crop_image_id, x1, y1)
-            else:
-                self.crop_image_id = self.canvas.create_image(x1, y1, anchor=tk.NW, image=self.crop_tk)
-                
-            self.draw_crop_hud(x1, y1, x2, y2)
-            
-            # Layer ordering: background image < crop image < crop boxes < HUD crosshair
-            self.canvas.tag_raise("crop_ui")
-            self.canvas.tag_raise("hud")
+        # Update cursor shape on Cancel button hover
+        if hasattr(self, 'cancel_btn_rect') and self.cancel_btn_rect.contains(pos):
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            self.setCursor(Qt.CursorShape.BlankCursor)
 
-    def on_release(self, event):
-        if self.start_x is None or self.start_y is None:
-            return
-            
-        cur_x, cur_y = event.x, event.y
-        screen_w = self.original_image.width
-        screen_h = self.original_image.height
-        
-        cur_x = max(0, min(cur_x, screen_w))
-        cur_y = max(0, min(cur_y, screen_h))
-        
-        x1 = min(self.start_x, cur_x)
-        y1 = min(self.start_y, cur_y)
-        x2 = max(self.start_x, cur_x)
-        y2 = max(self.start_y, cur_y)
-        
-        if (x2 - x1) > 5 and (y2 - y1) > 5:
-            self.captured_image = self.original_image.crop((x1, y1, x2, y2))
-            
-        self.close()
+        if self.is_selecting:
+            self.current_pos = pos
 
-    def capture_fixed_box(self, event):
-        """Captures the fixed size box area."""
-        cx, cy = event.x, event.y
-        w, h = self.fixed_width, self.fixed_height
-        screen_w = self.original_image.width
-        screen_h = self.original_image.height
-        
-        x1 = max(0, min(cx - w // 2, screen_w - w))
-        y1 = max(0, min(cy - h // 2, screen_h - h))
-        x2 = x1 + w
-        y2 = y1 + h
-        
-        self.captured_image = self.original_image.crop((x1, y1, x2, y2))
-        self.close()
+        self.update()
 
-    def cancel(self, event=None):
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            try:
+                self.releaseMouse()
+            except Exception:
+                pass
+
+            if self.is_selecting:
+                self.is_selecting = False
+                if self.start_pos and self.current_pos and self.original_image:
+                    x1 = min(self.start_pos.x(), self.current_pos.x())
+                    y1 = min(self.start_pos.y(), self.current_pos.y())
+                    x2 = max(self.start_pos.x(), self.current_pos.x())
+                    y2 = max(self.start_pos.y(), self.current_pos.y())
+
+                    scale_x, scale_y = self._get_scale_factors()
+                    ix1 = max(0, int(round(x1 * scale_x)))
+                    iy1 = max(0, int(round(y1 * scale_y)))
+                    ix2 = min(self.original_image.width, int(round(x2 * scale_x)))
+                    iy2 = min(self.original_image.height, int(round(y2 * scale_y)))
+
+                    if (ix2 - ix1) > 2 and (iy2 - iy1) > 2:
+                        self.captured_image = self.original_image.crop((ix1, iy1, ix2, iy2))
+
+                self.close_overlay()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.cancel()
+
+    def cancel(self):
+        try:
+            self.releaseMouse()
+        except Exception:
+            pass
         self.captured_image = None
-        self.close()
+        self.close_overlay()
 
-    def close(self):
-        # Restore cursor and destroy overlay
-        self.overlay.destroy()
-        
-        # Show main window again
-        self.root.deiconify()
-        self.root.update()
-        
+    def close_overlay(self):
+        try:
+            self.releaseMouse()
+        except Exception:
+            pass
+        self.close()
+        if self.main_window:
+            self.main_window.show()
+            self.main_window.activateWindow()
+            self.main_window.raise_()
+
         if self.callback:
             self.callback(self.captured_image)
+

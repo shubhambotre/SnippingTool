@@ -37,6 +37,7 @@ class AppConfig:
                             self.settings[key] = val
             except Exception as e:
                 print(f"Error loading configuration: {e}")
+                self.save()
         
         # Ensure default save directory exists
         save_path = self.settings.get("default_save_path")

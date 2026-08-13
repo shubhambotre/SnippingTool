@@ -1,6 +1,6 @@
 import math
 import re
-from PIL import Image, ImageDraw, ImageTk, ImageChops
+from PIL import Image, ImageDraw, ImageChops
 
 icon_cache = {}
 _SUPERSAMPLE = 4  # render at 4x then downsample for smooth anti-aliased edges
@@ -320,6 +320,7 @@ def draw_vector_icon(draw, name, color, size):
 
 def get_icon(name, color="#333333", size=(24, 24)):
     """Generates and returns a Tkinter PhotoImage for the requested icon in Light/Dark themes."""
+    from PIL import ImageTk
     key = (name, color, size)
     if key in icon_cache:
         return icon_cache[key]
@@ -335,6 +336,7 @@ def get_icon(name, color="#333333", size=(24, 24)):
 
 def get_button_image(name, icon_color, bg_color, border_color=None, size=(30, 30), icon_size=(16, 16)):
     """Generates a PhotoImage containing a rounded rectangle background and the centered vector icon."""
+    from PIL import ImageTk
     key = (name, icon_color, bg_color, border_color, size, icon_size)
     if key in icon_cache:
         return icon_cache[key]
@@ -361,3 +363,46 @@ def get_button_image(name, icon_color, bg_color, border_color=None, size=(30, 30
     tk_img = ImageTk.PhotoImage(img)
     icon_cache[key] = tk_img
     return tk_img
+
+
+def pil_to_qpixmap(pil_img):
+    """Converts a PIL RGBA Image to a PySide6 QPixmap."""
+    from PySide6.QtGui import QImage, QPixmap
+    if pil_img.mode != "RGBA":
+        pil_img = pil_img.convert("RGBA")
+    data = pil_img.tobytes("raw", "RGBA")
+    qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format.Format_RGBA8888)
+    return QPixmap.fromImage(qimg)
+
+
+def get_qicon(name, color="#333333", size=(24, 24)):
+    """Generates and returns a PySide6 QIcon for the requested icon in Light/Dark themes."""
+    from PySide6.QtGui import QIcon
+    key = ("qicon", name, color, size)
+    if key in icon_cache:
+        return icon_cache[key]
+
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw_vector_icon(draw, name, color, size)
+
+    pixmap = pil_to_qpixmap(img)
+    qicon = QIcon(pixmap)
+    icon_cache[key] = qicon
+    return qicon
+
+
+def get_qpixmap(name, color="#333333", size=(24, 24)):
+    """Generates and returns a PySide6 QPixmap for the requested icon in Light/Dark themes."""
+    key = ("qpixmap", name, color, size)
+    if key in icon_cache:
+        return icon_cache[key]
+
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw_vector_icon(draw, name, color, size)
+
+    pixmap = pil_to_qpixmap(img)
+    icon_cache[key] = pixmap
+    return pixmap
+
