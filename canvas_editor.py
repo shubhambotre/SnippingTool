@@ -2,7 +2,7 @@ import math
 import os
 import copy
 from PIL import Image, ImageDraw, ImageFont
-from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QObject
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QObject, QTimer
 from PySide6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont, QPixmap, QImage,
     QPainterPath, QTransform, QKeySequence, QFontMetrics
@@ -90,18 +90,29 @@ class SelectionBoxOverlayItem(QGraphicsItem):
     def update_target(self):
         if not self.canvas_editor or not self.canvas_editor.scene:
             return
-        selected = [
-            i for i in self.canvas_editor.scene.selectedItems()
-            if i != self and i != self.canvas_editor.bg_pixmap_item and i != self.canvas_editor.crop_item
-        ]
+        selected = []
+        try:
+            selected = [
+                i for i in self.canvas_editor.scene.selectedItems()
+                if i != self and i != self.canvas_editor.bg_pixmap_item and i != self.canvas_editor.crop_item
+            ]
+        except RuntimeError:
+            self.target_item = None
+            self.hide()
+            return
+
         if selected:
             self.target_item = selected[0]
-            rect = self.target_item.sceneBoundingRect()
-            self.setPos(rect.topLeft())
-            self.start_rect = QRectF(0, 0, rect.width(), rect.height())
-            self.prepareGeometryChange()
-            self.show()
-            self.update()
+            try:
+                rect = self.target_item.sceneBoundingRect()
+                self.setPos(rect.topLeft())
+                self.start_rect = QRectF(0, 0, rect.width(), rect.height())
+                self.prepareGeometryChange()
+                self.show()
+                self.update()
+            except RuntimeError:
+                self.target_item = None
+                self.hide()
         else:
             self.target_item = None
             self.hide()
@@ -178,9 +189,12 @@ class SelectionBoxOverlayItem(QGraphicsItem):
             self.active_handle = self.handle_at(event.pos())
             self.drag_start_pos = event.scenePos()
             if self.target_item:
-                self.start_scale = self.target_item.scale()
-                self.start_item_pos = self.target_item.pos()
-                self.start_scene_rect = self.target_item.sceneBoundingRect()
+                try:
+                    self.start_scale = self.target_item.scale()
+                    self.start_item_pos = self.target_item.pos()
+                    self.start_scene_rect = self.target_item.sceneBoundingRect()
+                except RuntimeError:
+                    self.target_item = None
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -191,58 +205,56 @@ class SelectionBoxOverlayItem(QGraphicsItem):
             dx = curr_pos.x() - self.drag_start_pos.x()
             dy = curr_pos.y() - self.drag_start_pos.y()
 
-            if self.active_handle == self.HANDLE_NONE:
-                self.target_item.setPos(self.start_item_pos.x() + dx, self.start_item_pos.y() + dy)
-                self.update_target()
-                event.accept()
-                return
+            try:
+                if self.active_handle == self.HANDLE_NONE:
+                    self.target_item.setPos(self.start_item_pos.x() + dx, self.start_item_pos.y() + dy)
+                    self.update_target()
+                    event.accept()
+                    return
 
-            r = self.start_scene_rect
-            new_l, new_t, new_r, new_b = r.left(), r.top(), r.right(), r.bottom()
+                r = self.start_scene_rect
+                new_l, new_t, new_r, new_b = r.left(), r.top(), r.right(), r.bottom()
 
-            if self.active_handle == self.HANDLE_SE:
-                new_r = max(r.left() + 10, r.right() + dx)
-                new_b = max(r.top() + 10, r.bottom() + dy)
-            elif self.active_handle == self.HANDLE_NW:
-                new_l = min(r.right() - 10, r.left() + dx)
-                new_t = min(r.bottom() - 10, r.top() + dy)
-            elif self.active_handle == self.HANDLE_NE:
-                new_t = min(r.bottom() - 10, r.top() + dy)
-                new_r = max(r.left() + 10, r.right() + dx)
-            elif self.active_handle == self.HANDLE_SW:
-                new_l = min(r.right() - 10, r.left() + dx)
-                new_b = max(r.top() + 10, r.bottom() + dy)
-            elif self.active_handle == self.HANDLE_E:
-                new_r = max(r.left() + 10, r.right() + dx)
-            elif self.active_handle == self.HANDLE_W:
-                new_l = min(r.right() - 10, r.left() + dx)
-            elif self.active_handle == self.HANDLE_S:
-                new_b = max(r.top() + 10, r.bottom() + dy)
-            elif self.active_handle == self.HANDLE_N:
-                new_t = min(r.bottom() - 10, r.top() + dy)
+                if self.active_handle == self.HANDLE_SE:
+                    new_r = max(r.left() + 10, r.right() + dx)
+                    new_b = max(r.top() + 10, r.bottom() + dy)
+                elif self.active_handle == self.HANDLE_NW:
+                    new_l = min(r.right() - 10, r.left() + dx)
+                    new_t = min(r.bottom() - 10, r.top() + dy)
+                elif self.active_handle == self.HANDLE_NE:
+                    new_t = min(r.bottom() - 10, r.top() + dy)
+                    new_r = max(r.left() + 10, r.right() + dx)
+                elif self.active_handle == self.HANDLE_SW:
+                    new_l = min(r.right() - 10, r.left() + dx)
+                    new_b = max(r.top() + 10, r.bottom() + dy)
+                elif self.active_handle == self.HANDLE_E:
+                    new_r = max(r.left() + 10, r.right() + dx)
+                elif self.active_handle == self.HANDLE_W:
+                    new_l = min(r.right() - 10, r.left() + dx)
+                elif self.active_handle == self.HANDLE_S:
+                    new_b = max(r.top() + 10, r.bottom() + dy)
+                elif self.active_handle == self.HANDLE_N:
+                    new_t = min(r.bottom() - 10, r.top() + dy)
 
-            new_w = max(5.0, new_r - new_l)
-            new_h = max(5.0, new_b - new_t)
+                new_w = max(5.0, new_r - new_l)
+                new_h = max(5.0, new_b - new_t)
 
-            if isinstance(self.target_item, (QGraphicsRectItem, QGraphicsEllipseItem)):
-                self.target_item.setPos(new_l, new_t)
-                self.target_item.setRect(0, 0, new_w, new_h)
-                self.target_item.setScale(1.0)
-            else:
-                sw = max(5.0, r.width())
-                sh = max(5.0, r.height())
-                scale_factor = max(0.05, max(new_w / sw, new_h / sh))
-                
-                if self.active_handle in (self.HANDLE_NW, self.HANDLE_W, self.HANDLE_SW):
+                if isinstance(self.target_item, (QGraphicsRectItem, QGraphicsEllipseItem)):
                     self.target_item.setPos(new_l, new_t)
-                elif self.active_handle in (self.HANDLE_NE, self.HANDLE_N):
-                    self.target_item.setPos(new_l, new_t)
+                    self.target_item.setRect(0, 0, new_w, new_h)
+                    self.target_item.setScale(1.0)
                 else:
+                    sw = max(5.0, r.width())
+                    sh = max(5.0, r.height())
+                    scale_factor = max(0.05, max(new_w / sw, new_h / sh))
                     self.target_item.setPos(new_l, new_t)
+                    self.target_item.setScale(self.start_scale * scale_factor)
 
-                self.target_item.setScale(self.start_scale * scale_factor)
+                self.update_target()
+            except RuntimeError:
+                self.target_item = None
+                self.hide()
 
-            self.update_target()
             event.accept()
         else:
             super().mouseMoveEvent(event)
@@ -380,12 +392,12 @@ class CanvasCropOverlayItem(QGraphicsItem):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.pos()
             if self.confirm_btn_rect.contains(pos):
-                self.apply_crop()
                 event.accept()
+                QTimer.singleShot(0, self.apply_crop)
                 return
             if self.cancel_btn_rect.contains(pos):
-                self.cancel_crop()
                 event.accept()
+                QTimer.singleShot(0, self.cancel_crop)
                 return
 
             self.active_handle = self.handle_at(pos)
@@ -445,9 +457,14 @@ class CanvasCropOverlayItem(QGraphicsItem):
         self.cancel_crop()
 
     def cancel_crop(self):
-        if self.canvas_editor and self.canvas_editor.scene:
-            self.canvas_editor.scene.removeItem(self)
-            self.canvas_editor.crop_overlay_item = None
+        if self.canvas_editor:
+            if getattr(self.canvas_editor, 'crop_overlay_item', None) == self:
+                self.canvas_editor.crop_overlay_item = None
+            if self.canvas_editor.scene:
+                try:
+                    self.canvas_editor.scene.removeItem(self)
+                except (RuntimeError, Exception):
+                    pass
             self.canvas_editor.set_tool("select")
             if self.canvas_editor.on_tool_change_callback:
                 self.canvas_editor.on_tool_change_callback("select")
@@ -512,6 +529,9 @@ class CanvasEditor(QGraphicsView):
     def set_image(self, pil_image):
         """Loads a PIL image into the canvas scene."""
         self.base_image = pil_image.copy()
+        self.current_item = None
+        self.crop_item = None
+        self.crop_overlay_item = None
         self.scene.clear()
         
         # Re-add selection box
@@ -573,8 +593,11 @@ class CanvasEditor(QGraphicsView):
         is_select = (self.tool == "select")
         for item in self.scene.items():
             if item != self.bg_pixmap_item and item != self.crop_item and item != self.selection_box and item != getattr(self, 'crop_overlay_item', None):
-                item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, is_select)
-                item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, is_select)
+                try:
+                    item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, is_select)
+                    item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, is_select)
+                except RuntimeError:
+                    pass
         
         if not is_select:
             self.scene.clearSelection()
@@ -590,19 +613,22 @@ class CanvasEditor(QGraphicsView):
             pen_color = QColor(self.color)
             pen = QPen(pen_color, self.thickness, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
 
-            if isinstance(item, QGraphicsPathItem):
-                item.setPen(pen)
-            elif isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)):
-                item.setPen(pen)
-                if self.fill_mode == "filled":
-                    item.setBrush(QBrush(pen_color))
-                else:
-                    item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-            elif isinstance(item, QGraphicsTextItem):
-                item.setDefaultTextColor(pen_color)
-                font = QFont(self.font_family, self.font_size)
-                font.setBold(True)
-                item.setFont(font)
+            try:
+                if isinstance(item, QGraphicsPathItem):
+                    item.setPen(pen)
+                elif isinstance(item, (QGraphicsRectItem, QGraphicsEllipseItem)):
+                    item.setPen(pen)
+                    if self.fill_mode == "filled":
+                        item.setBrush(QBrush(pen_color))
+                    else:
+                        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                elif isinstance(item, QGraphicsTextItem):
+                    item.setDefaultTextColor(pen_color)
+                    font = QFont(self.font_family, self.font_size)
+                    font.setBold(True)
+                    item.setFont(font)
+            except RuntimeError:
+                pass
         
         self.selection_box.update_target()
 
@@ -678,9 +704,12 @@ class CanvasEditor(QGraphicsView):
             elif self.tool == "eraser":
                 item_at_pos = self.scene.itemAt(scene_pos, QTransform())
                 if item_at_pos and item_at_pos != self.bg_pixmap_item and item_at_pos != self.selection_box:
-                    self.scene.removeItem(item_at_pos)
-                    if item_at_pos in self.history:
-                        self.history.remove(item_at_pos)
+                    try:
+                        self.scene.removeItem(item_at_pos)
+                        if item_at_pos in self.history:
+                            self.history.remove(item_at_pos)
+                    except RuntimeError:
+                        pass
 
             elif self.tool == "crop":
                 pen = QPen(QColor("#00E5FF"), 1.5, Qt.PenStyle.DashLine)
@@ -697,47 +726,61 @@ class CanvasEditor(QGraphicsView):
         if self.tool == "eraser" and (event.buttons() & Qt.MouseButton.LeftButton):
             item_at_pos = self.scene.itemAt(scene_pos, QTransform())
             if item_at_pos and item_at_pos != self.bg_pixmap_item and item_at_pos != self.selection_box:
-                self.scene.removeItem(item_at_pos)
-                if item_at_pos in self.history:
-                    self.history.remove(item_at_pos)
+                try:
+                    self.scene.removeItem(item_at_pos)
+                    if item_at_pos in self.history:
+                        self.history.remove(item_at_pos)
+                except RuntimeError:
+                    pass
 
         if self.start_point and self.current_item:
-            if self.tool in ("pencil", "highlighter"):
-                self.pencil_path.lineTo(scene_pos)
-                self.current_item.setPath(self.pencil_path)
+            try:
+                if self.tool in ("pencil", "highlighter"):
+                    self.pencil_path.lineTo(scene_pos)
+                    self.current_item.setPath(self.pencil_path)
 
-            elif self.tool == "line":
-                self.current_item.setLine(self.start_point.x(), self.start_point.y(), scene_pos.x(), scene_pos.y())
+                elif self.tool == "line":
+                    self.current_item.setLine(self.start_point.x(), self.start_point.y(), scene_pos.x(), scene_pos.y())
 
-            elif self.tool == "arrow":
-                path = make_arrow_path(self.start_point, scene_pos, head_len=max(10, self.thickness * 3.5))
-                self.current_item.setPath(path)
+                elif self.tool == "arrow":
+                    path = make_arrow_path(self.start_point, scene_pos, head_len=max(10, self.thickness * 3.5))
+                    self.current_item.setPath(path)
 
-            elif self.tool == "rectangle":
-                rect = QRectF(self.start_point, scene_pos).normalized()
-                self.current_item.setRect(rect)
+                elif self.tool == "rectangle":
+                    rect = QRectF(self.start_point, scene_pos).normalized()
+                    self.current_item.setRect(rect)
 
-            elif self.tool == "circle":
-                rect = QRectF(self.start_point, scene_pos).normalized()
-                self.current_item.setRect(rect)
+                elif self.tool == "circle":
+                    rect = QRectF(self.start_point, scene_pos).normalized()
+                    self.current_item.setRect(rect)
 
-            elif self.tool == "crop":
-                rect = QRectF(self.start_point, scene_pos).normalized()
-                self.current_item.setRect(rect)
+                elif self.tool == "crop":
+                    rect = QRectF(self.start_point, scene_pos).normalized()
+                    self.current_item.setRect(rect)
+            except RuntimeError:
+                self.current_item = None
+                self.start_point = None
 
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if self.start_point:
             if self.tool == "crop" and self.current_item:
-                crop_rect = self.current_item.rect()
-                self.scene.removeItem(self.current_item)
+                crop_rect = QRectF()
+                try:
+                    crop_rect = self.current_item.rect()
+                    self.scene.removeItem(self.current_item)
+                except RuntimeError:
+                    pass
                 self.current_item = None
                 self.start_point = None
 
                 if crop_rect.width() > 10 and crop_rect.height() > 10:
-                    if self.crop_overlay_item:
-                        self.scene.removeItem(self.crop_overlay_item)
+                    if getattr(self, 'crop_overlay_item', None):
+                        try:
+                            self.scene.removeItem(self.crop_overlay_item)
+                        except RuntimeError:
+                            pass
                     self.crop_overlay_item = CanvasCropOverlayItem(self, crop_rect)
                     self.scene.addItem(self.crop_overlay_item)
             else:
@@ -750,15 +793,18 @@ class CanvasEditor(QGraphicsView):
                         if self.on_tool_change_callback:
                             self.on_tool_change_callback("select")
 
-                    self.current_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-                    self.current_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+                    try:
+                        self.current_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+                        self.current_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
 
-                    if is_shape:
-                        self.scene.clearSelection()
-                        self.current_item.setSelected(True)
+                        if is_shape:
+                            self.scene.clearSelection()
+                            self.current_item.setSelected(True)
 
-                    self.history.append(self.current_item)
-                    self.redo_stack.clear()
+                        self.history.append(self.current_item)
+                        self.redo_stack.clear()
+                    except RuntimeError:
+                        pass
                     if self.on_draw_callback:
                         self.on_draw_callback()
                 self.current_item = None
@@ -795,16 +841,25 @@ class CanvasEditor(QGraphicsView):
             scale_delta = 1.1 if angle > 0 else 0.9
             for item in self.scene.selectedItems():
                 if item != self.selection_box and item != self.bg_pixmap_item:
-                    item.setScale(item.scale() * scale_delta)
+                    try:
+                        item.setScale(item.scale() * scale_delta)
+                    except RuntimeError:
+                        pass
             self.selection_box.update_target()
 
     def keyPressEvent(self, event):
         """Handles keyboard shortcuts (Delete, Backspace, Enter/Return crop confirm, Ctrl+A, Nudging, +/- Scaling)."""
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and getattr(self, 'crop_overlay_item', None):
-            self.crop_overlay_item.apply_crop()
+            try:
+                self.crop_overlay_item.apply_crop()
+            except RuntimeError:
+                self.crop_overlay_item = None
             return
         elif event.key() == Qt.Key.Key_Escape and getattr(self, 'crop_overlay_item', None):
-            self.crop_overlay_item.cancel_crop()
+            try:
+                self.crop_overlay_item.cancel_crop()
+            except RuntimeError:
+                self.crop_overlay_item = None
             return
 
         selected = [
@@ -817,7 +872,10 @@ class CanvasEditor(QGraphicsView):
                 for item in selected:
                     if item in self.history:
                         self.history.remove(item)
-                    self.scene.removeItem(item)
+                    try:
+                        self.scene.removeItem(item)
+                    except RuntimeError:
+                        pass
                 self.selection_box.update_target()
                 if self.on_draw_callback:
                     self.on_draw_callback()
@@ -827,7 +885,10 @@ class CanvasEditor(QGraphicsView):
             if self.tool == "select":
                 for item in self.scene.items():
                     if item != self.bg_pixmap_item and item != self.crop_item and item != self.selection_box and item != getattr(self, 'crop_overlay_item', None):
-                        item.setSelected(True)
+                        try:
+                            item.setSelected(True)
+                        except RuntimeError:
+                            pass
                 return
 
         if not selected:
@@ -838,27 +899,45 @@ class CanvasEditor(QGraphicsView):
 
         if event.key() == Qt.Key.Key_Left:
             for item in selected:
-                item.moveBy(-step, 0)
+                try:
+                    item.moveBy(-step, 0)
+                except RuntimeError:
+                    pass
             self.selection_box.update_target()
         elif event.key() == Qt.Key.Key_Right:
             for item in selected:
-                item.moveBy(step, 0)
+                try:
+                    item.moveBy(step, 0)
+                except RuntimeError:
+                    pass
             self.selection_box.update_target()
         elif event.key() == Qt.Key.Key_Up:
             for item in selected:
-                item.moveBy(0, -step)
+                try:
+                    item.moveBy(0, -step)
+                except RuntimeError:
+                    pass
             self.selection_box.update_target()
         elif event.key() == Qt.Key.Key_Down:
             for item in selected:
-                item.moveBy(0, step)
+                try:
+                    item.moveBy(0, step)
+                except RuntimeError:
+                    pass
             self.selection_box.update_target()
         elif event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
             for item in selected:
-                item.setScale(item.scale() * 1.1)
+                try:
+                    item.setScale(item.scale() * 1.1)
+                except RuntimeError:
+                    pass
             self.selection_box.update_target()
         elif event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore):
             for item in selected:
-                item.setScale(item.scale() * 0.9)
+                try:
+                    item.setScale(item.scale() * 0.9)
+                except RuntimeError:
+                    pass
             self.selection_box.update_target()
         else:
             super().keyPressEvent(event)
@@ -866,7 +945,10 @@ class CanvasEditor(QGraphicsView):
     def undo(self):
         if self.history:
             last_item = self.history.pop()
-            self.scene.removeItem(last_item)
+            try:
+                self.scene.removeItem(last_item)
+            except RuntimeError:
+                pass
             self.redo_stack.append(last_item)
             self.selection_box.update_target()
             if self.on_draw_callback:
@@ -875,7 +957,10 @@ class CanvasEditor(QGraphicsView):
     def redo(self):
         if self.redo_stack:
             item = self.redo_stack.pop()
-            self.scene.addItem(item)
+            try:
+                self.scene.addItem(item)
+            except RuntimeError:
+                pass
             self.history.append(item)
             self.selection_box.update_target()
             if self.on_draw_callback:
@@ -884,13 +969,19 @@ class CanvasEditor(QGraphicsView):
     def clear_canvas(self, reset_image=True):
         """Resets all vector annotations and base image."""
         for item in list(self.history):
-            self.scene.removeItem(item)
+            try:
+                self.scene.removeItem(item)
+            except RuntimeError:
+                pass
         self.history.clear()
         self.redo_stack.clear()
         if reset_image:
             self.base_image = None
             if self.bg_pixmap_item:
-                self.scene.removeItem(self.bg_pixmap_item)
+                try:
+                    self.scene.removeItem(self.bg_pixmap_item)
+                except RuntimeError:
+                    pass
                 self.bg_pixmap_item = None
         self.selection_box.update_target()
         if self.on_draw_callback:
@@ -908,7 +999,10 @@ class CanvasEditor(QGraphicsView):
         self.scene.clearSelection()
         self.selection_box.hide()
         if getattr(self, 'crop_overlay_item', None):
-            self.crop_overlay_item.hide()
+            try:
+                self.crop_overlay_item.hide()
+            except RuntimeError:
+                self.crop_overlay_item = None
 
         painter = QPainter(target_img)
         painter.setRenderHints(
@@ -921,6 +1015,9 @@ class CanvasEditor(QGraphicsView):
         painter.end()
 
         if getattr(self, 'crop_overlay_item', None):
-            self.crop_overlay_item.show()
+            try:
+                self.crop_overlay_item.show()
+            except RuntimeError:
+                self.crop_overlay_item = None
 
         return qimage_to_pil(target_img)
