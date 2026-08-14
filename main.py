@@ -54,6 +54,14 @@ def get_light_qss():
         QPushButton:pressed {
             background-color: #CBD5E1;
         }
+        QPushButton:checked {
+            background-color: #005FB8;
+            border-color: #004C94;
+            color: #FFFFFF;
+        }
+        QPushButton:checked:hover {
+            background-color: #004C94;
+        }
         QPushButton#btn_new {
             background-color: #005FB8;
             color: #FFFFFF;
@@ -114,6 +122,14 @@ def get_dark_qss():
         }
         QPushButton:pressed {
             background-color: #52525B;
+        }
+        QPushButton:checked {
+            background-color: #005FB8;
+            border-color: #004C94;
+            color: #FFFFFF;
+        }
+        QPushButton:checked:hover {
+            background-color: #004C94;
         }
         QPushButton#btn_new {
             background-color: #005FB8;
@@ -292,9 +308,11 @@ class SnippingToolApp(QMainWindow):
             ("circle", "circle", "Circle/Ellipse")
         ]
 
+        self.tool_icon_names = {}
         icon_color = "#E5E7EB" if self.config.get("theme") == "dark" else "#333333"
 
         for tool_name, icon_name, tooltip in tools:
+            self.tool_icon_names[tool_name] = icon_name
             btn = QPushButton()
             btn.setIcon(get_qicon(icon_name, icon_color, (self.icon_size_px, self.icon_size_px)))
             btn.setIconSize(QSize(self.icon_size_px, self.icon_size_px))
@@ -495,8 +513,13 @@ class SnippingToolApp(QMainWindow):
         if self.canvas_editor.tool != tool_name:
             self.canvas_editor.set_tool(tool_name)
 
+        is_dark = (self.config.get("theme") == "dark")
         for name, btn in self.tool_buttons.items():
-            btn.setChecked(name == tool_name)
+            is_active = (name == tool_name)
+            btn.setChecked(is_active)
+            icon_col = "#FFFFFF" if is_active else ("#E5E7EB" if is_dark else "#333333")
+            icon_name = getattr(self, "tool_icon_names", {}).get(name, name)
+            btn.setIcon(get_qicon(icon_name, icon_col, (self.icon_size_px, self.icon_size_px)))
 
         self.lbl_status_tool.setText(f"TOOL: {tool_name.upper()}")
 
@@ -578,13 +601,30 @@ class SnippingToolApp(QMainWindow):
 
     def copy_to_clipboard(self):
         baked = self.canvas_editor.get_baked_image()
+        selected = [
+            i for i in self.canvas_editor.scene.selectedItems()
+            if i != self.canvas_editor.selection_box and i != self.canvas_editor.bg_pixmap_item
+        ]
+        if selected:
+            rect = selected[0].sceneBoundingRect().toRect()
+            x1 = max(0, rect.x())
+            y1 = max(0, rect.y())
+            x2 = min(baked.width, rect.x() + rect.width())
+            y2 = min(baked.height, rect.y() + rect.height())
+            if x2 - x1 > 2 and y2 - y1 > 2:
+                baked = baked.crop((x1, y1, x2, y2))
+                self.statusBar().showMessage("Copied selected element to clipboard", 3000)
+            else:
+                self.statusBar().showMessage("Copied edited snippet to clipboard", 3000)
+        else:
+            self.statusBar().showMessage("Copied edited snippet to clipboard", 3000)
+
         pixmap = pil_to_qpixmap(baked)
         cb = QGuiApplication.clipboard()
         cb.setPixmap(pixmap)
         cb.setImage(pixmap.toImage())
 
         self.lbl_status_path.setText("COPIED TO CLIPBOARD!")
-        self.statusBar().showMessage("Copied edited snippet to clipboard", 3000)
 
     def save_quick(self):
         dest_folder = self.config.get("default_save_path")
