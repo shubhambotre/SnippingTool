@@ -2,8 +2,10 @@ import os
 import sys
 import time
 import math
+import threading
+import ctypes
 from PIL import Image, ImageGrab
-from PySide6.QtCore import Qt, QSize, QRect, QPoint, Signal
+from PySide6.QtCore import Qt, QSize, QRect, QPoint, Signal, QObject
 from PySide6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont, QPixmap, QImage,
     QIcon, QKeySequence, QShortcut, QGuiApplication, QClipboard
@@ -145,6 +147,8 @@ def get_dark_qss():
 
 
 class SnippingToolApp(QMainWindow):
+    hotkey_signal = Signal()
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Snipping Tool")
@@ -166,9 +170,44 @@ class SnippingToolApp(QMainWindow):
         self.load_settings()
         self.setup_shortcuts()
 
+        # Connect global hotkey signal
+        self.hotkey_signal.connect(self.start_capture)
+        self.start_global_hotkey_listener()
+
         # Fit launcher size
         self.resize(1020, 720)
         self.center_window()
+
+    def start_global_hotkey_listener(self):
+        """Starts a background thread to listen for the global Shift + Print Screen hotkey (Windows only)."""
+        if os.name != 'nt':
+            return
+
+        def listener():
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+
+            MOD_SHIFT = 0x0004
+            VK_SNAPSHOT = 0x2C  # Print Screen
+            WM_HOTKEY = 0x0312
+            HOTKEY_ID = 101
+
+            # Register hotkey Shift + Print Screen
+            if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_SHIFT, VK_SNAPSHOT):
+                return
+
+            try:
+                msg = wintypes.MSG()
+                while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+                    if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+                        self.hotkey_signal.emit()
+                    user32.TranslateMessage(ctypes.byref(msg))
+                    user32.DispatchMessageW(ctypes.byref(msg))
+            finally:
+                user32.UnregisterHotKey(None, HOTKEY_ID)
+
+        self.hotkey_thread = threading.Thread(target=listener, daemon=True)
+        self.hotkey_thread.start()
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -554,7 +593,14 @@ class SnippingToolApp(QMainWindow):
 
         fmt = self.config.get("default_format").lower()
         ext = f".{fmt}" if fmt != "jpeg" else ".jpg"
-        filename = f"Snip_{time.strftime('%Y%m%d_%H%M%S')}{ext}"
+        
+        pattern = self.config.get("naming_pattern") or "Capture_{datetime}"
+        time_str = time.strftime('%Y%m%d_%H%M%S')
+        if "{datetime}" in pattern:
+            filename = pattern.replace("{datetime}", time_str) + ext
+        else:
+            filename = f"{pattern}_{time_str}{ext}"
+            
         full_path = os.path.join(dest_folder, filename)
 
         baked = self.canvas_editor.get_baked_image()
@@ -610,7 +656,7 @@ class PreferencesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Preferences Configuration")
         self.config = config
-        self.resize(500, 320)
+        self.resize(520, 360)
         self.setup_ui()
 
     def setup_ui(self):
@@ -634,6 +680,13 @@ class PreferencesDialog(QDialog):
         btn_browse.clicked.connect(self.browse_dir)
         d_layout.addWidget(btn_browse)
         layout.addLayout(d_layout)
+
+        # Naming Pattern
+        p_layout = QHBoxLayout()
+        p_layout.addWidget(QLabel("Naming Pattern ({datetime}):"))
+        self.entry_pattern = QLineEdit(self.config.get("naming_pattern"))
+        p_layout.addWidget(self.entry_pattern)
+        layout.addLayout(p_layout)
 
         # Image Format
         f_layout = QHBoxLayout()
@@ -664,6 +717,7 @@ class PreferencesDialog(QDialog):
     def save_prefs(self):
         self.config.set("theme", self.cb_theme.currentText())
         self.config.set("default_save_path", self.entry_path.text())
+        self.config.set("naming_pattern", self.entry_pattern.text().strip())
         self.config.set("default_format", self.cb_fmt.currentText())
         self.accept()
 

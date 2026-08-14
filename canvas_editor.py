@@ -315,9 +315,22 @@ class CanvasEditor(QGraphicsView):
                         self.on_tool_change_callback("select")
             else:
                 if self.current_item:
+                    drawn_tool = self.tool
+                    is_shape = drawn_tool in ("rectangle", "circle")
+                    
+                    if is_shape:
+                        self.set_tool("select")
+                        if self.on_tool_change_callback:
+                            self.on_tool_change_callback("select")
+
                     is_select = (self.tool == "select")
                     self.current_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, is_select)
                     self.current_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, is_select)
+                    
+                    if is_shape:
+                        self.scene.clearSelection()
+                        self.current_item.setSelected(True)
+
                     self.history.append(self.current_item)
                     self.redo_stack.clear()
                     if self.on_draw_callback:

@@ -318,52 +318,6 @@ def draw_vector_icon(draw, name, color, size):
     draw._image.paste(tile, (0, 0), tile)
 
 
-def get_icon(name, color="#333333", size=(24, 24)):
-    """Generates and returns a Tkinter PhotoImage for the requested icon in Light/Dark themes."""
-    from PIL import ImageTk
-    key = (name, color, size)
-    if key in icon_cache:
-        return icon_cache[key]
-
-    img = Image.new("RGBA", size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw_vector_icon(draw, name, color, size)
-
-    tk_img = ImageTk.PhotoImage(img)
-    icon_cache[key] = tk_img
-    return tk_img
-
-
-def get_button_image(name, icon_color, bg_color, border_color=None, size=(30, 30), icon_size=(16, 16)):
-    """Generates a PhotoImage containing a rounded rectangle background and the centered vector icon."""
-    from PIL import ImageTk
-    key = (name, icon_color, bg_color, border_color, size, icon_size)
-    if key in icon_cache:
-        return icon_cache[key]
-
-    w, h = size
-    img = Image.new("RGBA", size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # Draw rounded background
-    if bg_color:
-        draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=6, fill=bg_color)
-    if border_color:
-        draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=6, outline=border_color, width=1)
-
-    # Create icon layer
-    icon_layer = Image.new("RGBA", icon_size, (0, 0, 0, 0))
-    icon_draw = ImageDraw.Draw(icon_layer)
-    draw_vector_icon(icon_draw, name, icon_color, icon_size)
-
-    # Paste icon layer centered on the button background
-    ix, iy = (w - icon_size[0]) // 2, (h - icon_size[1]) // 2
-    img.paste(icon_layer, (ix, iy), mask=icon_layer)
-
-    tk_img = ImageTk.PhotoImage(img)
-    icon_cache[key] = tk_img
-    return tk_img
-
 
 def pil_to_qpixmap(pil_img):
     """Converts a PIL RGBA Image to a PySide6 QPixmap."""
