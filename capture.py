@@ -441,12 +441,14 @@ class CaptureOverlay(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.is_selecting:
                 self.is_selecting = False
-                if self.start_pos and self.current_pos:
+                if self.start_pos and self.current_pos and self.original_image:
                     x1 = min(self.start_pos.x(), self.current_pos.x())
                     y1 = min(self.start_pos.y(), self.current_pos.y())
                     x2 = max(self.start_pos.x(), self.current_pos.x())
                     y2 = max(self.start_pos.y(), self.current_pos.y())
                     self.crop_rect = QRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
+                    self.confirm_snip()
+                    return
 
             self.active_handle = self.HANDLE_NONE
             self.drag_start_pos = None

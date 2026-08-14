@@ -180,6 +180,26 @@ class SelectionBoxOverlayItem(QGraphicsItem):
             if self.target_item:
                 self.start_scale = self.target_item.scale()
                 self.start_item_pos = self.target_item.pos()
+                self.start_scene_rect = self.target_item.sceneBoundingRect()
+                r = self.target_item.boundingRect()
+
+                # Set transformOriginPoint to opposite corner/edge for handle-specific resizing
+                if self.active_handle == self.HANDLE_SE:
+                    self.target_item.setTransformOriginPoint(r.topLeft())
+                elif self.active_handle == self.HANDLE_NW:
+                    self.target_item.setTransformOriginPoint(r.bottomRight())
+                elif self.active_handle == self.HANDLE_NE:
+                    self.target_item.setTransformOriginPoint(r.bottomLeft())
+                elif self.active_handle == self.HANDLE_SW:
+                    self.target_item.setTransformOriginPoint(r.topRight())
+                elif self.active_handle == self.HANDLE_E:
+                    self.target_item.setTransformOriginPoint(QPointF(r.left(), r.center().y()))
+                elif self.active_handle == self.HANDLE_W:
+                    self.target_item.setTransformOriginPoint(QPointF(r.right(), r.center().y()))
+                elif self.active_handle == self.HANDLE_S:
+                    self.target_item.setTransformOriginPoint(QPointF(r.center().x(), r.top()))
+                elif self.active_handle == self.HANDLE_N:
+                    self.target_item.setTransformOriginPoint(QPointF(r.center().x(), r.bottom()))
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -191,27 +211,30 @@ class SelectionBoxOverlayItem(QGraphicsItem):
             dy = curr_pos.y() - self.drag_start_pos.y()
 
             if self.active_handle == self.HANDLE_NONE:
-                # Move target item directly to new position on screenshot
                 self.target_item.setPos(self.start_item_pos.x() + dx, self.start_item_pos.y() + dy)
                 self.update_target()
                 event.accept()
                 return
 
-            w = max(10, self.start_rect.width())
-            h = max(10, self.start_rect.height())
+            sw = max(10, self.start_scene_rect.width())
+            sh = max(10, self.start_scene_rect.height())
 
             if self.active_handle == self.HANDLE_SE:
-                factor = max(0.1, 1.0 + (dx + dy) / (w + h))
+                factor = max(0.05, 1.0 + (dx + dy) / (sw + sh))
             elif self.active_handle == self.HANDLE_NW:
-                factor = max(0.1, 1.0 - (dx + dy) / (w + h))
-            elif self.active_handle in (self.HANDLE_E, self.HANDLE_NE):
-                factor = max(0.1, 1.0 + dx / w)
-            elif self.active_handle in (self.HANDLE_W, self.HANDLE_SW):
-                factor = max(0.1, 1.0 - dx / w)
+                factor = max(0.05, 1.0 - (dx + dy) / (sw + sh))
+            elif self.active_handle == self.HANDLE_NE:
+                factor = max(0.05, 1.0 + (dx - dy) / (sw + sh))
+            elif self.active_handle == self.HANDLE_SW:
+                factor = max(0.05, 1.0 + (-dx + dy) / (sw + sh))
+            elif self.active_handle == self.HANDLE_E:
+                factor = max(0.05, 1.0 + dx / sw)
+            elif self.active_handle == self.HANDLE_W:
+                factor = max(0.05, 1.0 - dx / sw)
             elif self.active_handle == self.HANDLE_S:
-                factor = max(0.1, 1.0 + dy / h)
+                factor = max(0.05, 1.0 + dy / sh)
             elif self.active_handle == self.HANDLE_N:
-                factor = max(0.1, 1.0 - dy / h)
+                factor = max(0.05, 1.0 - dy / sh)
             else:
                 factor = 1.0
 
@@ -505,16 +528,9 @@ class CanvasEditor(QGraphicsView):
     def mouseReleaseEvent(self, event):
         if self.start_point:
             if self.tool == "crop" and self.current_item:
-                crop_rect = self.current_item.rect().toRect()
-                self.scene.removeItem(self.current_item)
+                self.crop_item = self.current_item
                 self.current_item = None
                 self.start_point = None
-
-                if crop_rect.width() > 10 and crop_rect.height() > 10:
-                    self.apply_crop(crop_rect)
-                    self.set_tool("select")
-                    if self.on_tool_change_callback:
-                        self.on_tool_change_callback("select")
             else:
                 if self.current_item:
                     drawn_tool = self.tool
@@ -574,7 +590,19 @@ class CanvasEditor(QGraphicsView):
             self.selection_box.update_target()
 
     def keyPressEvent(self, event):
-        """Handles keyboard shortcuts (Delete, Backspace, Ctrl+A, Nudging, +/- Scaling)."""
+        """Handles keyboard shortcuts (Delete, Backspace, Enter/Return crop confirm, Ctrl+A, Nudging, +/- Scaling)."""
+        # Enter or Return to confirm active canvas crop
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.crop_item:
+            crop_rect = self.crop_item.rect().toRect()
+            self.scene.removeItem(self.crop_item)
+            self.crop_item = None
+            if crop_rect.width() > 10 and crop_rect.height() > 10:
+                self.apply_crop(crop_rect)
+                self.set_tool("select")
+                if self.on_tool_change_callback:
+                    self.on_tool_change_callback("select")
+            return
+
         selected = [
             i for i in self.scene.selectedItems()
             if i != self.selection_box and i != self.bg_pixmap_item and i != self.crop_item
