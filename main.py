@@ -597,7 +597,11 @@ class SnippingToolApp(QMainWindow):
         self.canvas_editor.redo()
 
     def clear_canvas(self):
-        self.canvas_editor.clear_canvas()
+        self.canvas_editor.clear_canvas(reset_image=True)
+        self.lbl_status_dims.setText("RESOLUTION: 0 x 0 PX")
+        self.lbl_status_zoom.setText("ZOOM: 100%")
+        self.lbl_status_coords.setText("COORDS: 0, 0")
+        self.statusBar().showMessage("Cleared workspace and captured snippet", 3000)
 
     def copy_to_clipboard(self):
         baked = self.canvas_editor.get_baked_image()

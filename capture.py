@@ -48,12 +48,13 @@ class CaptureOverlay(QWidget):
         self.hud_color = QColor("#00E5FF")
         self.hud_bg = QColor("#0E1013")
 
-        # Hide main window briefly
+        # Hide main window completely and set opacity to 0.0 to prevent shadow artifacts
         if self.main_window:
+            self.main_window.setWindowOpacity(0.0)
             self.main_window.hide()
-        QApplication.processEvents()
-        time.sleep(0.15)
-        QApplication.processEvents()
+        for _ in range(6):
+            QApplication.processEvents()
+            time.sleep(0.06)
 
         # Grab full desktop screenshot
         self.take_screenshot()
@@ -366,6 +367,7 @@ class CaptureOverlay(QWidget):
             pass
         self.close()
         if self.main_window:
+            self.main_window.setWindowOpacity(1.0)
             self.main_window.show()
             self.main_window.activateWindow()
             self.main_window.raise_()

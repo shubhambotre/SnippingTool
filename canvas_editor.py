@@ -178,15 +178,23 @@ class SelectionBoxOverlayItem(QGraphicsItem):
             self.drag_start_pos = event.scenePos()
             if self.target_item:
                 self.start_scale = self.target_item.scale()
+                self.start_item_pos = self.target_item.pos()
             event.accept()
         else:
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self.active_handle != self.HANDLE_NONE and self.target_item and self.drag_start_pos:
+        if self.target_item and self.drag_start_pos:
             curr_pos = event.scenePos()
             dx = curr_pos.x() - self.drag_start_pos.x()
             dy = curr_pos.y() - self.drag_start_pos.y()
+
+            if self.active_handle == self.HANDLE_NONE:
+                # Move target item directly to new position on screenshot
+                self.target_item.setPos(self.start_item_pos.x() + dx, self.start_item_pos.y() + dy)
+                self.update_target()
+                event.accept()
+                return
 
             w = max(10, self.start_rect.width())
             h = max(10, self.start_rect.height())
@@ -642,12 +650,17 @@ class CanvasEditor(QGraphicsView):
             if self.on_draw_callback:
                 self.on_draw_callback()
 
-    def clear_canvas(self):
-        """Resets all vector annotations."""
+    def clear_canvas(self, reset_image=True):
+        """Resets all vector annotations and base image."""
         for item in list(self.history):
             self.scene.removeItem(item)
         self.history.clear()
         self.redo_stack.clear()
+        if reset_image:
+            self.base_image = None
+            if self.bg_pixmap_item:
+                self.scene.removeItem(self.bg_pixmap_item)
+                self.bg_pixmap_item = None
         self.selection_box.update_target()
         if self.on_draw_callback:
             self.on_draw_callback()
