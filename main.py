@@ -499,7 +499,8 @@ class SnippingToolApp(QMainWindow):
         if pil_image:
             self.canvas_editor.set_image(pil_image)
             self.lbl_status_dims.setText(f"RESOLUTION: {pil_image.width} x {pil_image.height} PX")
-        if self.isHidden():
+            self.showMaximized()
+        elif self.isHidden():
             self.show()
         self.activateWindow()
         self.raise_()

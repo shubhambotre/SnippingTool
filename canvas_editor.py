@@ -95,6 +95,7 @@ class SelectionBoxOverlayItem(QGraphicsItem):
         ]
         if selected:
             self.target_item = selected[0]
+            self.target_item.setTransformOriginPoint(self.target_item.boundingRect().center())
             rect = self.target_item.sceneBoundingRect()
             self.setPos(rect.topLeft())
             self.start_rect = QRectF(0, 0, rect.width(), rect.height())
