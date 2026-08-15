@@ -376,6 +376,11 @@ class CollageEditorDialog(QDialog):
         self.chk_flip_h.stateChanged.connect(self.on_cell_property_changed)
         self.chk_flip_v = QCheckBox("Flip V")
         self.chk_flip_v.stateChanged.connect(self.on_cell_property_changed)
+        orient_layout.addWidget(self.chk_flip_h)
+        orient_layout.addWidget(self.chk_flip_v)
+
+        opts_layout.addWidget(orient_box)
+
         # 4. Vertical Panning & Alignment
         pan_box = QGroupBox("Vertical Alignment & Position")
         pan_layout = QHBoxLayout(pan_box)
@@ -523,42 +528,45 @@ class CollageEditorDialog(QDialog):
         self.lbl_cell_hint.setVisible(False)
         self.panel_cell_opts.setTitle(f"Selected Cell #{self.selected_idx + 1} Properties")
 
-        self.cb_fit.blockSignals(True)
-        self.cb_rot.blockSignals(True)
-        self.chk_flip_h.blockSignals(True)
-        self.chk_flip_v.blockSignals(True)
-        if hasattr(self, 'slider_pan_x'):
-            self.slider_pan_x.blockSignals(True)
-            self.slider_pan_y.blockSignals(True)
-        self.cb_filter.blockSignals(True)
-        self.slider_bright.blockSignals(True)
-        self.slider_contrast.blockSignals(True)
+        try:
+            self.cb_fit.blockSignals(True)
+            self.cb_rot.blockSignals(True)
+            self.chk_flip_h.blockSignals(True)
+            self.chk_flip_v.blockSignals(True)
+            if hasattr(self, 'slider_pan_x'):
+                self.slider_pan_x.blockSignals(True)
+                self.slider_pan_y.blockSignals(True)
+            self.cb_filter.blockSignals(True)
+            self.slider_bright.blockSignals(True)
+            self.slider_contrast.blockSignals(True)
 
-        self.cb_fit.setCurrentText(cell.fit)
-        rot_str = f"{cell.rotation}°"
-        self.cb_rot.setCurrentText(rot_str if rot_str in ["0°", "90°", "180°", "270°"] else "0°")
-        self.chk_flip_h.setChecked(cell.flip_h)
-        self.chk_flip_v.setChecked(cell.flip_v)
-        if hasattr(self, 'slider_pan_x'):
-            self.slider_pan_x.setValue(int(cell.pan_x * 100))
-            self.slider_pan_y.setValue(int(cell.pan_y * 100))
+            self.cb_fit.setCurrentText(cell.fit)
+            rot_str = f"{cell.rotation}°"
+            self.cb_rot.setCurrentText(rot_str if rot_str in ["0°", "90°", "180°", "270°"] else "0°")
+            self.chk_flip_h.setChecked(cell.flip_h)
+            self.chk_flip_v.setChecked(cell.flip_v)
+            if hasattr(self, 'slider_pan_x'):
+                self.slider_pan_x.setValue(int(cell.pan_x * 100))
+                self.slider_pan_y.setValue(int(cell.pan_y * 100))
 
-        self.cb_filter.setCurrentText(cell.filter_type)
-        self.slider_bright.setValue(cell.brightness)
-        self.lbl_bright_val.setText(str(cell.brightness))
-        self.slider_contrast.setValue(cell.contrast)
-        self.lbl_contrast_val.setText(str(cell.contrast))
+            self.cb_filter.setCurrentText(cell.filter_type)
+            self.slider_bright.setValue(cell.brightness)
+            self.lbl_bright_val.setText(str(cell.brightness))
+            self.slider_contrast.setValue(cell.contrast)
+            self.lbl_contrast_val.setText(str(cell.contrast))
 
-        self.cb_fit.blockSignals(False)
-        self.cb_rot.blockSignals(False)
-        self.chk_flip_h.blockSignals(False)
-        self.chk_flip_v.blockSignals(False)
-        if hasattr(self, 'slider_pan_x'):
-            self.slider_pan_x.blockSignals(False)
-            self.slider_pan_y.blockSignals(False)
-        self.cb_filter.blockSignals(False)
-        self.slider_bright.blockSignals(False)
-        self.slider_contrast.blockSignals(False)
+            self.cb_fit.blockSignals(False)
+            self.cb_rot.blockSignals(False)
+            self.chk_flip_h.blockSignals(False)
+            self.chk_flip_v.blockSignals(False)
+            if hasattr(self, 'slider_pan_x'):
+                self.slider_pan_x.blockSignals(False)
+                self.slider_pan_y.blockSignals(False)
+            self.cb_filter.blockSignals(False)
+            self.slider_bright.blockSignals(False)
+            self.slider_contrast.blockSignals(False)
+        except RuntimeError:
+            pass
 
     def on_filter_changed(self, text):
         if self.selected_idx is not None and self.selected_idx < len(self.cells):
