@@ -416,12 +416,7 @@ class SnippingToolApp(QMainWindow):
         self.btn_clear = self.make_action_button("clear", self.clear_canvas, "Clear / Reset Workspace", icon_color)
         right_grp.addWidget(self.btn_clear)
 
-        self.btn_open_file = QPushButton()
-        self.btn_open_file.setIcon(get_qicon("folder", icon_color, (self.icon_size_px, self.icon_size_px)))
-        self.btn_open_file.setIconSize(QSize(self.icon_size_px, self.icon_size_px))
-        self.btn_open_file.setFixedSize(self.btn_size_px, self.btn_size_px)
-        self.btn_open_file.setToolTip("Open Image File (Ctrl+O)")
-        self.btn_open_file.clicked.connect(self.open_file)
+        self.btn_open_file = self.make_action_button("folder_open", self.open_file, "Open Image File (Ctrl+O)", icon_color)
         right_grp.addWidget(self.btn_open_file)
 
         self.btn_copy = self.make_action_button("copy", self.copy_to_clipboard, "Copy to Clipboard (Ctrl+C)", icon_color)
@@ -483,7 +478,9 @@ class SnippingToolApp(QMainWindow):
         header_lay.addWidget(lbl_welcome)
         header_lay.addStretch()
 
-        btn_open = QPushButton("📁 Open File (Ctrl+O)")
+        btn_open = QPushButton(" Open File (Ctrl+O)")
+        btn_open.setIcon(get_qicon("folder_open", "#FFFFFF", (16, 16)))
+        btn_open.setIconSize(QSize(16, 16))
         btn_open.setStyleSheet("background-color: #005FB8; color: #FFFFFF; font-weight: bold; padding: 4px 10px; border-radius: 4px;")
         btn_open.clicked.connect(self.open_file)
         header_lay.addWidget(btn_open)
@@ -524,8 +521,23 @@ class SnippingToolApp(QMainWindow):
 
         if self.isMaximized() or self.isFullScreen():
             self.showNormal()
+            QApplication.processEvents()
 
-        self.resize(560, 220)
+        widgets_to_update = [
+            self,
+            self.centralWidget() if hasattr(self, 'centralWidget') else None,
+            getattr(self, 'toolbar_border_frame', None),
+            getattr(self, 'toolbar_frame', None),
+            getattr(self, 'launcher_card', None)
+        ]
+        for w in widgets_to_update:
+            if w:
+                w.updateGeometry()
+                if w.layout():
+                    w.layout().activate()
+
+        self.resize(self.minimumSizeHint())
+        self.adjustSize()
         self.center_window()
         self.showNormal()
 
