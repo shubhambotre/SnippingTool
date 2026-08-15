@@ -1,164 +1,177 @@
-import os
 import sys
-import time
+import os
 import math
+import time
+import json
 import threading
 import ctypes
-from PIL import Image, ImageGrab
-from PySide6.QtCore import Qt, QSize, QRect, QPoint, Signal, QObject
+from PIL import Image, ImageDraw, ImageFont
+
+from PySide6.QtCore import Qt, QSize, QPoint, QRect, Signal, QObject
 from PySide6.QtGui import (
-    QPainter, QColor, QPen, QBrush, QFont, QPixmap, QImage,
-    QIcon, QKeySequence, QShortcut, QGuiApplication, QClipboard
+    QIcon, QPixmap, QImage, QColor, QFont, QKeySequence, QShortcut,
+    QGuiApplication, QPainter, QPen
 )
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QComboBox, QLineEdit, QFileDialog, QMessageBox,
-    QDialog, QFrame, QSpinBox, QColorDialog, QToolTip, QStatusBar
+    QPushButton, QLabel, QComboBox, QLineEdit, QFileDialog, QDialog,
+    QFormLayout, QSpinBox, QColorDialog, QMessageBox, QFrame, QSplitter,
+    QStatusBar, QGridLayout, QGroupBox
 )
 
-# Import local PySide6 components
 from config import AppConfig
-from capture import CaptureOverlay
-from canvas_editor import CanvasEditor, pil_to_qpixmap, qimage_to_pil
 from icons import get_qicon, get_qpixmap
+from canvas_editor import CanvasEditor, pil_to_qpixmap
+from capture import CaptureOverlay
 from collage_editor import CollageEditorDialog
-
-
-def get_light_qss():
-    return """
-        QMainWindow, QDialog, QWidget {
-            background-color: #F8F9FA;
-            color: #0E1013;
-            font-family: 'Segoe UI', Arial, sans-serif;
-        }
-        QFrame#toolbar_border_frame {
-            background-color: #E2E8F0;
-            border-radius: 8px;
-        }
-        QFrame#toolbar_frame {
-            background-color: #FFFFFF;
-            border-radius: 6px;
-        }
-        QPushButton {
-            background-color: #F1F5F9;
-            border: 1px solid #CBD5E1;
-            border-radius: 5px;
-            padding: 4px 8px;
-            color: #0F172A;
-            font-weight: 500;
-        }
-        QPushButton:hover {
-            background-color: #E2E8F0;
-            border-color: #94A3B8;
-        }
-        QPushButton:pressed {
-            background-color: #CBD5E1;
-        }
-        QPushButton:checked {
-            background-color: #005FB8;
-            border-color: #004C94;
-            color: #FFFFFF;
-        }
-        QPushButton:checked:hover {
-            background-color: #004C94;
-        }
-        QPushButton#btn_new {
-            background-color: #005FB8;
-            color: #FFFFFF;
-            font-weight: bold;
-            border: none;
-            padding: 6px 14px;
-        }
-        QPushButton#btn_new:hover {
-            background-color: #004C94;
-        }
-        QComboBox, QLineEdit, QSpinBox {
-            background-color: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            border-radius: 4px;
-            padding: 3px 6px;
-            color: #0F172A;
-        }
-        QComboBox:hover, QLineEdit:hover {
-            border-color: #005FB8;
-        }
-        QStatusBar {
-            background-color: #FFFFFF;
-            border-top: 1px solid #E2E8F0;
-            color: #475569;
-            font-family: 'Consolas', monospace;
-            font-size: 11px;
-            font-weight: bold;
-        }
-    """
 
 
 def get_dark_qss():
     return """
-        QMainWindow, QDialog, QWidget {
-            background-color: #121212;
-            color: #E5E7EB;
-            font-family: 'Segoe UI', Arial, sans-serif;
-        }
-        QFrame#toolbar_border_frame {
-            background-color: #27272A;
-            border-radius: 8px;
-        }
-        QFrame#toolbar_frame {
-            background-color: #18181B;
-            border-radius: 6px;
-        }
-        QPushButton {
-            background-color: #27272A;
-            border: 1px solid #3F3F46;
-            border-radius: 5px;
-            padding: 4px 8px;
-            color: #F4F4F5;
-            font-weight: 500;
-        }
-        QPushButton:hover {
-            background-color: #3F3F46;
-            border-color: #71717A;
-        }
-        QPushButton:pressed {
-            background-color: #52525B;
-        }
-        QPushButton:checked {
-            background-color: #005FB8;
-            border-color: #004C94;
-            color: #FFFFFF;
-        }
-        QPushButton:checked:hover {
-            background-color: #004C94;
-        }
-        QPushButton#btn_new {
-            background-color: #005FB8;
-            color: #FFFFFF;
-            font-weight: bold;
-            border: none;
-            padding: 6px 14px;
-        }
-        QPushButton#btn_new:hover {
-            background-color: #004C94;
-        }
-        QComboBox, QLineEdit, QSpinBox {
-            background-color: #27272A;
-            border: 1px solid #3F3F46;
-            border-radius: 4px;
-            padding: 3px 6px;
-            color: #F4F4F5;
-        }
-        QComboBox:hover, QLineEdit:hover {
-            border-color: #005FB8;
-        }
-        QStatusBar {
-            background-color: #18181B;
-            border-top: 1px solid #27272A;
-            color: #9CA3AF;
-            font-family: 'Consolas', monospace;
-            font-size: 11px;
-            font-weight: bold;
-        }
+    QMainWindow, QDialog {
+        background-color: #121417;
+        color: #E5E7EB;
+    }
+    QFrame#toolbar_frame {
+        background-color: #1A1D23;
+        border-radius: 8px;
+    }
+    QFrame#toolbar_border_frame {
+        background-color: #2A2E35;
+        border-radius: 10px;
+    }
+    QPushButton {
+        background-color: transparent;
+        color: #E5E7EB;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 4px;
+    }
+    QPushButton:hover {
+        background-color: #2D323C;
+        border: 1px solid #404654;
+    }
+    QPushButton:pressed {
+        background-color: #005FB8;
+    }
+    QPushButton:checked {
+        background-color: #005FB8;
+        border: 1px solid #00E5FF;
+    }
+    QPushButton:checked:hover {
+        background-color: #007AFF;
+        border: 1px solid #00E5FF;
+    }
+    QPushButton#btn_new {
+        background-color: #005FB8;
+        color: #FFFFFF;
+        font-weight: bold;
+        padding: 4px 10px;
+        border-radius: 4px;
+    }
+    QPushButton#btn_new:hover {
+        background-color: #007AFF;
+    }
+    QComboBox {
+        background-color: #1E2228;
+        color: #E5E7EB;
+        border: 1px solid #333842;
+        border-radius: 4px;
+        padding: 2px 6px;
+    }
+    QComboBox:hover {
+        border: 1px solid #005FB8;
+    }
+    QComboBox::drop-down {
+        border: none;
+    }
+    QLineEdit {
+        background-color: #1E2228;
+        color: #E5E7EB;
+        border: 1px solid #333842;
+        border-radius: 4px;
+        padding: 2px 6px;
+    }
+    QStatusBar {
+        background-color: #121417;
+        color: #888888;
+        font-family: Consolas, monospace;
+        font-size: 11px;
+    }
+    """
+
+def get_light_qss():
+    return """
+    QMainWindow, QDialog {
+        background-color: #F3F4F6;
+        color: #1F2937;
+    }
+    QFrame#toolbar_frame {
+        background-color: #FFFFFF;
+        border-radius: 8px;
+    }
+    QFrame#toolbar_border_frame {
+        background-color: #E5E7EB;
+        border-radius: 10px;
+    }
+    QPushButton {
+        background-color: transparent;
+        color: #374151;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 4px;
+    }
+    QPushButton:hover {
+        background-color: #F3F4F6;
+        border: 1px solid #D1D5DB;
+    }
+    QPushButton:pressed {
+        background-color: #005FB8;
+        color: #FFFFFF;
+    }
+    QPushButton:checked {
+        background-color: #005FB8;
+        color: #FFFFFF;
+        border: 1px solid #00E5FF;
+    }
+    QPushButton:checked:hover {
+        background-color: #007AFF;
+        color: #FFFFFF;
+        border: 1px solid #00E5FF;
+    }
+    QPushButton#btn_new {
+        background-color: #005FB8;
+        color: #FFFFFF;
+        font-weight: bold;
+        padding: 4px 10px;
+        border-radius: 4px;
+    }
+    QPushButton#btn_new:hover {
+        background-color: #007AFF;
+    }
+    QComboBox {
+        background-color: #FFFFFF;
+        color: #1F2937;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 2px 6px;
+    }
+    QComboBox:hover {
+        border: 1px solid #005FB8;
+    }
+    QLineEdit {
+        background-color: #FFFFFF;
+        color: #1F2937;
+        border: 1px solid #D1D5DB;
+        border-radius: 4px;
+        padding: 2px 6px;
+    }
+    QStatusBar {
+        background-color: #F3F4F6;
+        color: #6B7280;
+        font-family: Consolas, monospace;
+        font-size: 11px;
+    }
     """
 
 
@@ -169,14 +182,13 @@ class SnippingToolApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Snipping Tool")
 
-        self.btn_size_px = 36
-        self.icon_size_px = 22
-        self.brand_size_px = 24
-
         self.config = AppConfig()
+        self.overlay = None
         self.tool_buttons = {}
+        self.icon_size_px = 18
+        self.btn_size_px = 30
+        self.brand_size_px = 22
 
-        # Set Window Icon
         logo_path = os.path.join(os.path.dirname(__file__), "SnippingTool.png")
         if os.path.exists(logo_path):
             self.setWindowIcon(QIcon(logo_path))
@@ -190,9 +202,10 @@ class SnippingToolApp(QMainWindow):
         self.hotkey_signal.connect(self.start_capture)
         self.start_global_hotkey_listener()
 
-        # Fit launcher size
-        self.resize(1020, 720)
+        # Fit initial launcher size (minimal compact widget mode)
+        self.resize(560, 220)
         self.center_window()
+        self.show_launcher_mode()
 
     def start_global_hotkey_listener(self):
         """Starts a background thread to listen for the global Shift + Print Screen hotkey (Windows only)."""
@@ -208,7 +221,6 @@ class SnippingToolApp(QMainWindow):
             WM_HOTKEY = 0x0312
             HOTKEY_ID = 101
 
-            # Register hotkey Shift + Print Screen
             if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_SHIFT, VK_SNAPSHOT):
                 return
 
@@ -404,6 +416,14 @@ class SnippingToolApp(QMainWindow):
         self.btn_clear = self.make_action_button("clear", self.clear_canvas, "Clear / Reset Workspace", icon_color)
         right_grp.addWidget(self.btn_clear)
 
+        self.btn_open_file = QPushButton()
+        self.btn_open_file.setIcon(get_qicon("folder", icon_color, (self.icon_size_px, self.icon_size_px)))
+        self.btn_open_file.setIconSize(QSize(self.icon_size_px, self.icon_size_px))
+        self.btn_open_file.setFixedSize(self.btn_size_px, self.btn_size_px)
+        self.btn_open_file.setToolTip("Open Image File (Ctrl+O)")
+        self.btn_open_file.clicked.connect(self.open_file)
+        right_grp.addWidget(self.btn_open_file)
+
         self.btn_copy = self.make_action_button("copy", self.copy_to_clipboard, "Copy to Clipboard (Ctrl+C)", icon_color)
         right_grp.addWidget(self.btn_copy)
 
@@ -420,6 +440,9 @@ class SnippingToolApp(QMainWindow):
 
         toolbar_border_layout.addWidget(self.toolbar_frame)
         main_layout.addWidget(self.toolbar_border_frame)
+
+        # Minimal Launcher Card (Cheatsheet & Quick Launch Actions)
+        self.setup_launcher_card(main_layout)
 
         # Center Canvas Workspace Editor
         self.canvas_editor = CanvasEditor()
@@ -444,6 +467,72 @@ class SnippingToolApp(QMainWindow):
         self.status_bar.addWidget(self.lbl_status_dims)
         self.status_bar.addWidget(self.lbl_status_coords)
         self.status_bar.addPermanentWidget(self.lbl_status_path)
+
+    def setup_launcher_card(self, parent_layout):
+        self.launcher_card = QFrame()
+        self.launcher_card.setStyleSheet("background-color: #121417; border: 1px solid #2A2E35; border-radius: 8px;")
+        card_layout = QVBoxLayout(self.launcher_card)
+        card_layout.setContentsMargins(14, 10, 14, 10)
+        card_layout.setSpacing(8)
+
+        # Header with Open File button
+        header_lay = QHBoxLayout()
+        lbl_welcome = QLabel("⌨️ Keyboard Shortcuts & Quick Actions")
+        lbl_welcome.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl_welcome.setStyleSheet("color: #00E5FF;")
+        header_lay.addWidget(lbl_welcome)
+        header_lay.addStretch()
+
+        btn_open = QPushButton("📁 Open File (Ctrl+O)")
+        btn_open.setStyleSheet("background-color: #005FB8; color: #FFFFFF; font-weight: bold; padding: 4px 10px; border-radius: 4px;")
+        btn_open.clicked.connect(self.open_file)
+        header_lay.addWidget(btn_open)
+        card_layout.addLayout(header_lay)
+
+        # Shortcuts Cheatsheet Grid
+        grid_lay = QGridLayout()
+        grid_lay.setSpacing(6)
+
+        shortcuts_info = [
+            ("Shift + PrintScreen", "Global Desktop Snip"),
+            ("Ctrl + N", "New Region Snip"),
+            ("Ctrl + O", "Open Image File"),
+            ("Ctrl + S", "Quick Save File"),
+            ("Ctrl + C", "Copy to Clipboard"),
+            ("Ctrl + Z", "Undo Action"),
+        ]
+
+        for idx, (key, desc) in enumerate(shortcuts_info):
+            r, c = idx // 2, (idx % 2) * 2
+            lbl_key = QLabel(key)
+            lbl_key.setStyleSheet("font-weight: bold; background-color: #1E2228; border: 1px solid #3A3F4A; border-radius: 4px; padding: 2px 6px; color: #FFFFFF;")
+            lbl_desc = QLabel(desc)
+            lbl_desc.setStyleSheet("color: #A0A5B0;")
+            grid_lay.addWidget(lbl_key, r, c)
+            grid_lay.addWidget(lbl_desc, r, c + 1)
+
+        card_layout.addLayout(grid_lay)
+        parent_layout.addWidget(self.launcher_card)
+
+    def show_launcher_mode(self):
+        if hasattr(self, 'launcher_card') and self.launcher_card:
+            self.launcher_card.show()
+        if hasattr(self, 'mid_tools_container') and self.mid_tools_container:
+            self.mid_tools_container.setVisible(False)
+        if hasattr(self, 'canvas_editor') and self.canvas_editor:
+            self.canvas_editor.hide()
+
+        self.resize(560, 220)
+        self.center_window()
+        self.showNormal()
+
+    def show_editor_mode(self):
+        if hasattr(self, 'launcher_card') and self.launcher_card:
+            self.launcher_card.hide()
+        if hasattr(self, 'mid_tools_container') and self.mid_tools_container:
+            self.mid_tools_container.setVisible(True)
+        if hasattr(self, 'canvas_editor') and self.canvas_editor:
+            self.canvas_editor.show()
 
     def make_v_divider(self):
         line = QFrame()
@@ -470,6 +559,7 @@ class SnippingToolApp(QMainWindow):
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self.start_capture)
+        QShortcut(QKeySequence("Ctrl+O"), self, self.open_file)
         QShortcut(QKeySequence("Ctrl+C"), self, self.copy_to_clipboard)
         QShortcut(QKeySequence("Ctrl+S"), self, self.save_quick)
         QShortcut(QKeySequence("Ctrl+Shift+S"), self, self.save_as)
@@ -500,7 +590,7 @@ class SnippingToolApp(QMainWindow):
 
     def on_capture_complete(self, pil_image):
         if pil_image:
-            self.mid_tools_container.setVisible(True)
+            self.show_editor_mode()
             self.canvas_editor.set_image(pil_image)
             self.lbl_status_dims.setText(f"RESOLUTION: {pil_image.width} x {pil_image.height} PX")
             self.showMaximized()
@@ -508,6 +598,20 @@ class SnippingToolApp(QMainWindow):
             self.show()
         self.activateWindow()
         self.raise_()
+
+    def open_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Image File", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp)"
+        )
+        if file_path:
+            try:
+                img = Image.open(file_path).convert("RGBA")
+                self.show_editor_mode()
+                self.canvas_editor.set_image(img)
+                self.lbl_status_dims.setText(f"RESOLUTION: {img.width} x {img.height} PX")
+                self.showMaximized()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load image:\n{e}")
 
     def on_crop_complete(self, w, h):
         self.lbl_status_dims.setText(f"RESOLUTION: {w} x {h} PX")
@@ -519,29 +623,27 @@ class SnippingToolApp(QMainWindow):
             self.canvas_editor.set_tool(tool_name)
 
         is_dark = (self.config.get("theme") == "dark")
-        for name, btn in self.tool_buttons.items():
-            is_active = (name == tool_name)
-            btn.setChecked(is_active)
-            icon_col = "#FFFFFF" if is_active else ("#E5E7EB" if is_dark else "#333333")
-            icon_name = getattr(self, "tool_icon_names", {}).get(name, name)
-            btn.setIcon(get_qicon(icon_name, icon_col, (self.icon_size_px, self.icon_size_px)))
+        active_color = "#FFFFFF"
+        inactive_color = "#E5E7EB" if is_dark else "#333333"
 
-        self.lbl_status_tool.setText(f"TOOL: {tool_name.upper()}")
+        for name, btn in self.tool_buttons.items():
+            icon_name = self.tool_icon_names.get(name, "pointer")
+            if name == tool_name:
+                btn.setChecked(True)
+                btn.setIcon(get_qicon(icon_name, active_color, (self.icon_size_px, self.icon_size_px)))
+            else:
+                btn.setChecked(False)
+                btn.setIcon(get_qicon(icon_name, inactive_color, (self.icon_size_px, self.icon_size_px)))
 
     def set_color(self, color_hex):
         self.config.set("last_color", color_hex)
         self.canvas_editor.set_color(color_hex)
+        self.lbl_status_tool.setText(f"TOOL: {self.canvas_editor.tool.upper()} ({color_hex})")
 
     def choose_custom_color(self):
-        col = QColorDialog.getColor(QColor(self.config.get("last_color")), self, "Choose Drawing Color")
+        col = QColorDialog.getColor(QColor(self.canvas_editor.color), self, "Select Custom Drawing Color")
         if col.isValid():
             self.set_color(col.name())
-
-    def on_mode_changed(self, mode):
-        self.config.set("default_capture_mode", mode)
-        is_fixed = (mode == "fixed")
-        self.entry_w.setEnabled(is_fixed)
-        self.entry_h.setEnabled(is_fixed)
 
     def on_style_changed(self):
         try:
@@ -551,25 +653,28 @@ class SnippingToolApp(QMainWindow):
         except ValueError:
             pass
 
-        fill = self.cb_fill.currentText()
-        self.canvas_editor.set_fill_mode(fill)
-        self.config.set("last_fill_mode", fill)
+        mode = self.cb_fill.currentText()
+        self.canvas_editor.set_fill_mode(mode)
+        self.config.set("last_fill_mode", mode)
 
-        family = self.cb_font_family.currentText()
-        self.canvas_editor.set_font_family(family)
-        self.config.set("last_font_family", family)
+        font_fam = self.cb_font_family.currentText()
+        self.canvas_editor.set_font_family(font_fam)
+        self.config.set("last_font_family", font_fam)
 
         try:
-            fsize = int(self.cb_font_size.currentText())
-            self.canvas_editor.set_font_size(fsize)
-            self.config.set("last_font_size", fsize)
+            f_size = int(self.cb_font_size.currentText())
+            self.canvas_editor.set_font_size(f_size)
+            self.config.set("last_font_size", f_size)
         except ValueError:
             pass
+
+    def on_mode_changed(self, mode):
+        self.config.set("default_capture_mode", mode)
 
     def font_dec(self):
         try:
             curr = int(self.cb_font_size.currentText())
-            new_val = max(8, curr - 2)
+            new_val = max(6, curr - 2)
             self.cb_font_size.setCurrentText(str(new_val))
         except ValueError:
             pass
@@ -603,6 +708,7 @@ class SnippingToolApp(QMainWindow):
 
     def clear_canvas(self):
         self.canvas_editor.clear_canvas(reset_image=True)
+        self.show_launcher_mode()
         self.lbl_status_dims.setText("RESOLUTION: 0 x 0 PX")
         self.lbl_status_zoom.setText("ZOOM: 100%")
         self.lbl_status_coords.setText("COORDS: 0, 0")
@@ -615,15 +721,18 @@ class SnippingToolApp(QMainWindow):
             if i != self.canvas_editor.selection_box and i != self.canvas_editor.bg_pixmap_item
         ]
         if selected:
-            rect = selected[0].sceneBoundingRect().toRect()
-            x1 = max(0, rect.x())
-            y1 = max(0, rect.y())
-            x2 = min(baked.width, rect.x() + rect.width())
-            y2 = min(baked.height, rect.y() + rect.height())
-            if x2 - x1 > 2 and y2 - y1 > 2:
-                baked = baked.crop((x1, y1, x2, y2))
-                self.statusBar().showMessage("Copied selected element to clipboard", 3000)
-            else:
+            try:
+                rect = selected[0].sceneBoundingRect().toRect()
+                x1 = max(0, rect.x())
+                y1 = max(0, rect.y())
+                x2 = min(baked.width, rect.x() + rect.width())
+                y2 = min(baked.height, rect.y() + rect.height())
+                if x2 - x1 > 2 and y2 - y1 > 2:
+                    baked = baked.crop((x1, y1, x2, y2))
+                    self.statusBar().showMessage("Copied selected element to clipboard", 3000)
+                else:
+                    self.statusBar().showMessage("Copied edited snippet to clipboard", 3000)
+            except Exception:
                 self.statusBar().showMessage("Copied edited snippet to clipboard", 3000)
         else:
             self.statusBar().showMessage("Copied edited snippet to clipboard", 3000)
@@ -658,25 +767,20 @@ class SnippingToolApp(QMainWindow):
         else:
             baked.save(full_path, fmt.upper())
 
-        self.lbl_status_path.setText(f"SAVED: {filename}")
-        self.statusBar().showMessage(f"Saved snippet to {full_path}", 4000)
+        self.lbl_status_path.setText(f"QUICK SAVED: {filename}")
+        self.statusBar().showMessage(f"Quick saved to {full_path}", 4000)
 
     def save_as(self):
-        baked = self.canvas_editor.get_baked_image()
-        dest_folder = self.config.get("default_save_path")
+        fmt = self.config.get("default_format").lower()
+        ext_filter = "PNG Image (*.png)" if fmt == "png" else "JPEG Image (*.jpg)"
 
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Image As",
-            os.path.join(dest_folder, f"Snip_{time.strftime('%Y%m%d_%H%M%S')}.png"),
-            "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg);;BMP Image (*.bmp)"
+            self, "Save Snippet As", self.config.get("default_save_path"), f"{ext_filter};;All Files (*.*)"
         )
-
         if file_path:
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext in (".jpg", ".jpeg"):
+            baked = self.canvas_editor.get_baked_image()
+            if file_path.lower().endswith(".jpg") or file_path.lower().endswith(".jpeg"):
                 baked.convert("RGB").save(file_path, "JPEG")
-            elif ext == ".bmp":
-                baked.convert("RGB").save(file_path, "BMP")
             else:
                 baked.save(file_path, "PNG")
 
@@ -720,61 +824,61 @@ class PreferencesDialog(QDialog):
         t_layout.addWidget(self.cb_theme)
         layout.addLayout(t_layout)
 
-        # Save Directory
-        d_layout = QHBoxLayout()
-        d_layout.addWidget(QLabel("Save Directory:"))
-        self.entry_path = QLineEdit(self.config.get("default_save_path"))
-        d_layout.addWidget(self.entry_path)
+        # Save Folder
+        path_layout = QHBoxLayout()
+        path_layout.addWidget(QLabel("Default Save Folder:"))
+        self.lbl_path = QLabel(self.config.get("default_save_path"))
+        path_layout.addWidget(self.lbl_path)
+
         btn_browse = QPushButton("Browse...")
-        btn_browse.clicked.connect(self.browse_dir)
-        d_layout.addWidget(btn_browse)
-        layout.addLayout(d_layout)
+        btn_browse.clicked.connect(self.browse_folder)
+        path_layout.addWidget(btn_browse)
+        layout.addLayout(path_layout)
 
         # Naming Pattern
-        p_layout = QHBoxLayout()
-        p_layout.addWidget(QLabel("Naming Pattern ({datetime}):"))
-        self.entry_pattern = QLineEdit(self.config.get("naming_pattern"))
-        p_layout.addWidget(self.entry_pattern)
-        layout.addLayout(p_layout)
+        pattern_layout = QHBoxLayout()
+        pattern_layout.addWidget(QLabel("Filename Naming Pattern:"))
+        self.entry_pattern = QLineEdit(self.config.get("naming_pattern") or "Capture_{datetime}")
+        pattern_layout.addWidget(self.entry_pattern)
+        layout.addLayout(pattern_layout)
 
-        # Image Format
-        f_layout = QHBoxLayout()
-        f_layout.addWidget(QLabel("Default Format:"))
-        self.cb_fmt = QComboBox()
-        self.cb_fmt.addItems(["png", "jpeg", "bmp"])
-        self.cb_fmt.setCurrentText(self.config.get("default_format"))
-        f_layout.addWidget(self.cb_fmt)
-        layout.addLayout(f_layout)
+        # Format
+        fmt_layout = QHBoxLayout()
+        fmt_layout.addWidget(QLabel("Default Format:"))
+        self.cb_format = QComboBox()
+        self.cb_format.addItems(["PNG", "JPEG"])
+        self.cb_format.setCurrentText(self.config.get("default_format"))
+        fmt_layout.addWidget(self.cb_format)
+        layout.addLayout(fmt_layout)
 
-        # Buttons
-        b_layout = QHBoxLayout()
-        btn_save = QPushButton("Save Preferences")
-        btn_save.setStyleSheet("background-color: #005FB8; color: white; font-weight: bold;")
-        btn_save.clicked.connect(self.save_prefs)
-        b_layout.addWidget(btn_save)
+        # Actions
+        btn_layout = QHBoxLayout()
+        btn_save = QPushButton("Save Settings")
+        btn_save.clicked.connect(self.save_settings)
+        btn_layout.addWidget(btn_save)
 
         btn_cancel = QPushButton("Cancel")
         btn_cancel.clicked.connect(self.reject)
-        b_layout.addWidget(btn_cancel)
-        layout.addLayout(b_layout)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
 
-    def browse_dir(self):
-        path = QFileDialog.getExistingDirectory(self, "Select Save Directory", self.entry_path.text())
-        if path:
-            self.entry_path.setText(path)
+    def browse_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Save Folder", self.config.get("default_save_path"))
+        if folder:
+            self.lbl_path.setText(folder)
 
-    def save_prefs(self):
+    def save_settings(self):
         self.config.set("theme", self.cb_theme.currentText())
-        self.config.set("default_save_path", self.entry_path.text())
-        self.config.set("naming_pattern", self.entry_pattern.text().strip())
-        self.config.set("default_format", self.cb_fmt.currentText())
+        self.config.set("default_save_path", self.lbl_path.text())
+        self.config.set("naming_pattern", self.entry_pattern.text())
+        self.config.set("default_format", self.cb_format.currentText())
         self.accept()
 
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     window = SnippingToolApp()
-    window.show()
     sys.exit(app.exec())
 
 

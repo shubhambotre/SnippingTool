@@ -284,156 +284,116 @@ class CollageEditorDialog(QDialog):
         main_layout.addLayout(top_bar)
 
         # -------------------------------------------------------------------
-        # CENTER WORKSPACE (Preview + Cell Options Splitter)
+        # TOP IMAGE PLANNING & SLOT ADJUSTMENTS BAR (Above Preview Canvas)
         # -------------------------------------------------------------------
-        workspace_splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        # Left: Interactive Preview Canvas Label
-        self.lbl_preview = QLabel()
-        self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_preview.setStyleSheet("background-color: #121212; border: 1px solid #333333; border-radius: 6px;")
-        self.lbl_preview.mousePressEvent = self.on_preview_clicked
-        workspace_splitter.addWidget(self.lbl_preview)
-
-        # Right: Selected Cell Customization Side Panel
-        self.panel_cell_opts = QGroupBox("Selected Cell Properties")
-        self.panel_cell_opts.setFixedWidth(310)
-        cell_layout = QVBoxLayout(self.panel_cell_opts)
+        self.panel_cell_opts = QGroupBox("Selected Slot Photo Planning & Adjustments")
+        cell_main_layout = QVBoxLayout(self.panel_cell_opts)
+        cell_main_layout.setContentsMargins(8, 6, 8, 6)
 
         self.lbl_cell_hint = QLabel("Select a cell slot in the preview canvas to edit image positioning, filters, adjustments, or capture a screen area.")
         self.lbl_cell_hint.setWordWrap(True)
         self.lbl_cell_hint.setStyleSheet("color: #888888; font-style: italic;")
-        cell_layout.addWidget(self.lbl_cell_hint)
+        cell_main_layout.addWidget(self.lbl_cell_hint)
 
         self.opts_container = QWidget()
-        opts_layout = QVBoxLayout(self.opts_container)
+        opts_layout = QHBoxLayout(self.opts_container)
         opts_layout.setContentsMargins(0, 0, 0, 0)
-        opts_layout.setSpacing(10)
+        opts_layout.setSpacing(12)
 
         # 1. Slot Image Actions
         act_box = QGroupBox("Image Source")
-        act_layout = QVBoxLayout(act_box)
+        act_layout = QHBoxLayout(act_box)
         
-        btn_load = QPushButton("📁 Load File into Slot")
+        btn_load = QPushButton("📁 Load File")
         btn_load.clicked.connect(self.load_image_for_selected)
         act_layout.addWidget(btn_load)
 
-        btn_snip = QPushButton("✂️ Snip Screen Region into Slot")
+        btn_snip = QPushButton("✂️ Snip Region")
         btn_snip.clicked.connect(self.snip_into_selected)
         act_layout.addWidget(btn_snip)
 
-        h_act = QHBoxLayout()
         btn_replace = QPushButton("🔄 Replace")
         btn_replace.clicked.connect(self.load_image_for_selected)
-        h_act.addWidget(btn_replace)
+        act_layout.addWidget(btn_replace)
 
-        btn_clear = QPushButton("🗑️ Clear Slot")
+        btn_clear = QPushButton("🗑️ Clear")
         btn_clear.clicked.connect(self.clear_selected_slot)
-        h_act.addWidget(btn_clear)
-        act_layout.addLayout(h_act)
+        act_layout.addWidget(btn_clear)
 
         opts_layout.addWidget(act_box)
 
         # 2. Photo Adjustments & Filters
         filter_box = QGroupBox("Photo Adjustments & Filter")
-        filter_layout = QVBoxLayout(filter_box)
+        filter_layout = QHBoxLayout(filter_box)
 
-        f_lay = QHBoxLayout()
-        f_lay.addWidget(QLabel("Filter:"))
+        filter_layout.addWidget(QLabel("Filter:"))
         self.cb_filter = QComboBox()
         self.cb_filter.addItems(["Original", "Grayscale", "Sepia", "Vivid", "Cool", "Warm"])
         self.cb_filter.currentTextChanged.connect(self.on_filter_changed)
-        f_lay.addWidget(self.cb_filter)
-        filter_layout.addLayout(f_lay)
+        filter_layout.addWidget(self.cb_filter)
 
-        b_lay = QHBoxLayout()
-        b_lay.addWidget(QLabel("Brightness:"))
+        filter_layout.addWidget(QLabel("Bright:"))
         self.lbl_bright_val = QLabel("0")
-        self.lbl_bright_val.setFixedWidth(30)
+        self.lbl_bright_val.setFixedWidth(24)
         self.slider_bright = QSlider(Qt.Orientation.Horizontal)
         self.slider_bright.setRange(-100, 100)
         self.slider_bright.setValue(0)
+        self.slider_bright.setFixedWidth(80)
         self.slider_bright.valueChanged.connect(self.on_brightness_changed)
-        b_lay.addWidget(self.slider_bright)
-        b_lay.addWidget(self.lbl_bright_val)
-        filter_layout.addLayout(b_lay)
+        filter_layout.addWidget(self.slider_bright)
+        filter_layout.addWidget(self.lbl_bright_val)
 
-        c_lay = QHBoxLayout()
-        c_lay.addWidget(QLabel("Contrast:"))
+        filter_layout.addWidget(QLabel("Contrast:"))
         self.lbl_contrast_val = QLabel("0")
-        self.lbl_contrast_val.setFixedWidth(30)
+        self.lbl_contrast_val.setFixedWidth(24)
         self.slider_contrast = QSlider(Qt.Orientation.Horizontal)
         self.slider_contrast.setRange(-100, 100)
         self.slider_contrast.setValue(0)
+        self.slider_contrast.setFixedWidth(80)
         self.slider_contrast.valueChanged.connect(self.on_contrast_changed)
-        c_lay.addWidget(self.slider_contrast)
-        c_lay.addWidget(self.lbl_contrast_val)
-        filter_layout.addLayout(c_lay)
+        filter_layout.addWidget(self.slider_contrast)
+        filter_layout.addWidget(self.lbl_contrast_val)
 
         opts_layout.addWidget(filter_box)
 
         # 3. Fit Mode & Orientation
         orient_box = QGroupBox("Fit & Orientation")
-        orient_layout = QVBoxLayout(orient_box)
+        orient_layout = QHBoxLayout(orient_box)
 
-        fit_layout = QHBoxLayout()
-        fit_layout.addWidget(QLabel("Fit Mode:"))
+        orient_layout.addWidget(QLabel("Fit:"))
         self.cb_fit = QComboBox()
         self.cb_fit.addItems(["cover", "contain", "stretch"])
         self.cb_fit.currentTextChanged.connect(self.on_cell_property_changed)
-        fit_layout.addWidget(self.cb_fit)
-        orient_layout.addLayout(fit_layout)
+        orient_layout.addWidget(self.cb_fit)
 
-        rot_layout = QHBoxLayout()
-        rot_layout.addWidget(QLabel("Rotation:"))
+        orient_layout.addWidget(QLabel("Rot:"))
         self.cb_rot = QComboBox()
         self.cb_rot.addItems(["0°", "90°", "180°", "270°"])
         self.cb_rot.currentTextChanged.connect(self.on_cell_property_changed)
-        rot_layout.addWidget(self.cb_rot)
-        orient_layout.addLayout(rot_layout)
+        orient_layout.addWidget(self.cb_rot)
 
-        mirror_layout = QHBoxLayout()
         self.chk_flip_h = QCheckBox("Flip H")
         self.chk_flip_h.stateChanged.connect(self.on_cell_property_changed)
         self.chk_flip_v = QCheckBox("Flip V")
         self.chk_flip_v.stateChanged.connect(self.on_cell_property_changed)
-        mirror_layout.addWidget(self.chk_flip_h)
-        mirror_layout.addWidget(self.chk_flip_v)
-        orient_layout.addLayout(mirror_layout)
+        orient_layout.addWidget(self.chk_flip_h)
+        orient_layout.addWidget(self.chk_flip_v)
 
         opts_layout.addWidget(orient_box)
 
-        # 4. Pan Sliders
-        pan_box = QGroupBox("Image Panning")
-        pan_layout = QVBoxLayout(pan_box)
-
-        pan_x_layout = QHBoxLayout()
-        pan_x_layout.addWidget(QLabel("Pan X:"))
-        self.slider_pan_x = QSlider(Qt.Orientation.Horizontal)
-        self.slider_pan_x.setRange(0, 100)
-        self.slider_pan_x.setValue(50)
-        self.slider_pan_x.valueChanged.connect(self.on_cell_property_changed)
-        pan_x_layout.addWidget(self.slider_pan_x)
-        pan_layout.addLayout(pan_x_layout)
-
-        pan_y_layout = QHBoxLayout()
-        pan_y_layout.addWidget(QLabel("Pan Y:"))
-        self.slider_pan_y = QSlider(Qt.Orientation.Horizontal)
-        self.slider_pan_y.setRange(0, 100)
-        self.slider_pan_y.setValue(50)
-        self.slider_pan_y.valueChanged.connect(self.on_cell_property_changed)
-        pan_y_layout.addWidget(self.slider_pan_y)
-        pan_layout.addLayout(pan_y_layout)
-
-        opts_layout.addWidget(pan_box)
-
-        cell_layout.addWidget(self.opts_container)
+        cell_main_layout.addWidget(self.opts_container)
         self.opts_container.setVisible(False)
-        cell_layout.addStretch()
 
-        workspace_splitter.addWidget(self.panel_cell_opts)
-        workspace_splitter.setSizes([800, 310])
-        main_layout.addWidget(workspace_splitter)
+        main_layout.addWidget(self.panel_cell_opts)
+
+        # -------------------------------------------------------------------
+        # CENTER PREVIEW CANVAS (Below Planning Bar)
+        # -------------------------------------------------------------------
+        self.lbl_preview = QLabel()
+        self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_preview.setStyleSheet("background-color: #121212; border: 1px solid #333333; border-radius: 6px;")
+        self.lbl_preview.mousePressEvent = self.on_preview_clicked
+        main_layout.addWidget(self.lbl_preview, 1)
 
         # -------------------------------------------------------------------
         # BOTTOM DIALOG ACTIONS
@@ -543,8 +503,9 @@ class CollageEditorDialog(QDialog):
         self.cb_rot.blockSignals(True)
         self.chk_flip_h.blockSignals(True)
         self.chk_flip_v.blockSignals(True)
-        self.slider_pan_x.blockSignals(True)
-        self.slider_pan_y.blockSignals(True)
+        if hasattr(self, 'slider_pan_x'):
+            self.slider_pan_x.blockSignals(True)
+            self.slider_pan_y.blockSignals(True)
         self.cb_filter.blockSignals(True)
         self.slider_bright.blockSignals(True)
         self.slider_contrast.blockSignals(True)
@@ -554,8 +515,9 @@ class CollageEditorDialog(QDialog):
         self.cb_rot.setCurrentText(rot_str if rot_str in ["0°", "90°", "180°", "270°"] else "0°")
         self.chk_flip_h.setChecked(cell.flip_h)
         self.chk_flip_v.setChecked(cell.flip_v)
-        self.slider_pan_x.setValue(int(cell.pan_x * 100))
-        self.slider_pan_y.setValue(int(cell.pan_y * 100))
+        if hasattr(self, 'slider_pan_x'):
+            self.slider_pan_x.setValue(int(cell.pan_x * 100))
+            self.slider_pan_y.setValue(int(cell.pan_y * 100))
 
         self.cb_filter.setCurrentText(cell.filter_type)
         self.slider_bright.setValue(cell.brightness)
@@ -567,8 +529,9 @@ class CollageEditorDialog(QDialog):
         self.cb_rot.blockSignals(False)
         self.chk_flip_h.blockSignals(False)
         self.chk_flip_v.blockSignals(False)
-        self.slider_pan_x.blockSignals(False)
-        self.slider_pan_y.blockSignals(False)
+        if hasattr(self, 'slider_pan_x'):
+            self.slider_pan_x.blockSignals(False)
+            self.slider_pan_y.blockSignals(False)
         self.cb_filter.blockSignals(False)
         self.slider_bright.blockSignals(False)
         self.slider_contrast.blockSignals(False)
@@ -604,8 +567,9 @@ class CollageEditorDialog(QDialog):
 
         cell.flip_h = self.chk_flip_h.isChecked()
         cell.flip_v = self.chk_flip_v.isChecked()
-        cell.pan_x = self.slider_pan_x.value() / 100.0
-        cell.pan_y = self.slider_pan_y.value() / 100.0
+        if hasattr(self, 'slider_pan_x'):
+            cell.pan_x = self.slider_pan_x.value() / 100.0
+            cell.pan_y = self.slider_pan_y.value() / 100.0
 
         self.update_preview()
 
