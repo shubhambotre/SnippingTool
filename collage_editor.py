@@ -376,10 +376,34 @@ class CollageEditorDialog(QDialog):
         self.chk_flip_h.stateChanged.connect(self.on_cell_property_changed)
         self.chk_flip_v = QCheckBox("Flip V")
         self.chk_flip_v.stateChanged.connect(self.on_cell_property_changed)
-        orient_layout.addWidget(self.chk_flip_h)
-        orient_layout.addWidget(self.chk_flip_v)
+        # 4. Vertical Panning & Alignment
+        pan_box = QGroupBox("Vertical Alignment & Position")
+        pan_layout = QHBoxLayout(pan_box)
 
-        opts_layout.addWidget(orient_box)
+        btn_top = QPushButton("⬆️ Top")
+        btn_top.setToolTip("Align Image to Top Header")
+        btn_top.clicked.connect(lambda: self.set_pan_y(0.0))
+        pan_layout.addWidget(btn_top)
+
+        btn_center = QPushButton("↕️ Center")
+        btn_center.setToolTip("Align Image to Center")
+        btn_center.clicked.connect(lambda: self.set_pan_y(0.5))
+        pan_layout.addWidget(btn_center)
+
+        btn_bottom = QPushButton("⬇️ Bottom")
+        btn_bottom.setToolTip("Align Image to Bottom Footer")
+        btn_bottom.clicked.connect(lambda: self.set_pan_y(1.0))
+        pan_layout.addWidget(btn_bottom)
+
+        pan_layout.addWidget(QLabel("Pos Y:"))
+        self.slider_pan_y = QSlider(Qt.Orientation.Horizontal)
+        self.slider_pan_y.setRange(0, 100)
+        self.slider_pan_y.setValue(50)
+        self.slider_pan_y.setFixedWidth(80)
+        self.slider_pan_y.valueChanged.connect(self.on_cell_property_changed)
+        pan_layout.addWidget(self.slider_pan_y)
+
+        opts_layout.addWidget(pan_box)
 
         cell_main_layout.addWidget(self.opts_container)
         self.opts_container.setVisible(False)
@@ -551,6 +575,15 @@ class CollageEditorDialog(QDialog):
         if self.selected_idx is not None and self.selected_idx < len(self.cells):
             self.cells[self.selected_idx].contrast = val
             self.lbl_contrast_val.setText(str(val))
+            self.update_preview()
+
+    def set_pan_y(self, val):
+        if self.selected_idx is not None and self.selected_idx < len(self.cells):
+            self.cells[self.selected_idx].pan_y = val
+            if hasattr(self, 'slider_pan_y'):
+                self.slider_pan_y.blockSignals(True)
+                self.slider_pan_y.setValue(int(val * 100))
+                self.slider_pan_y.blockSignals(False)
             self.update_preview()
 
     def on_cell_property_changed(self):

@@ -522,6 +522,9 @@ class SnippingToolApp(QMainWindow):
         if hasattr(self, 'canvas_editor') and self.canvas_editor:
             self.canvas_editor.hide()
 
+        if self.isMaximized() or self.isFullScreen():
+            self.showNormal()
+
         self.resize(560, 220)
         self.center_window()
         self.showNormal()
