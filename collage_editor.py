@@ -1,6 +1,6 @@
 import os
 import time
-from PIL import Image, ImageDraw, ImageOps, ImageFont
+from PIL import Image, ImageDraw, ImageOps, ImageFont, ImageEnhance
 from PySide6.QtCore import Qt, QSize, QRect
 from PySide6.QtGui import QPainter, QColor, QPixmap, QImage, QFont, QPen, QBrush
 from PySide6.QtWidgets import (
@@ -51,7 +51,7 @@ DEFAULT_OUT_H = 1080
 
 
 class CollageCell:
-    """Holds the transformation and image state for one cell slot in the collage."""
+    """Holds the transformation, photo editing, and image state for one cell slot in the collage."""
 
     def __init__(self, nx, ny, nw, nh):
         self.nx = float(nx)
@@ -63,8 +63,11 @@ class CollageCell:
         self.rotation = 0          # 0 | 90 | 180 | 270
         self.flip_h = False
         self.flip_v = False
-        self.pan_x = 0.5           # 0.0 (Left) to 1.0 (Right), default 0.5 (Center)
-        self.pan_y = 0.0           # 0.0 (Top) to 1.0 (Bottom), default 0.0 (Top)
+        self.pan_x = 0.5           # 0.0 (Left) to 1.0 (Right), default 0.5
+        self.pan_y = 0.5           # 0.0 (Top) to 1.0 (Bottom), default 0.5
+        self.brightness = 0        # -100 to +100
+        self.contrast = 0          # -100 to +100
+        self.filter_type = "Original" # Original | Grayscale | Sepia | Vivid | Cool | Warm
 
     def pixel_rect(self, out_w, out_h, gap):
         """Compute inset pixel rect (x1, y1, x2, y2) for this cell."""
@@ -75,7 +78,7 @@ class CollageCell:
         y2 = round((self.ny + self.nh) * out_h) - half
         return x1, y1, max(x1 + 1, x2), max(y1 + 1, y2)
 
-    def render_into(self, canvas_img, out_w, out_h, gap, is_selected=False):
+    def render_into(self, canvas_img, out_w, out_h, gap, is_selected=False, corner_radius=0, draw_selection=True):
         """Paste cell contents into canvas_img at the computed position."""
         x1, y1, x2, y2 = self.pixel_rect(out_w, out_h, gap)
         cw, ch = x2 - x1, y2 - y1
@@ -83,30 +86,18 @@ class CollageCell:
             return
 
         if self.image is None:
-            # Draw placeholder tile with diagonal lines, plus icon, and text hint
-            placeholder = Image.new("RGBA", (cw, ch), (185, 190, 200, 255))
+            placeholder = Image.new("RGBA", (cw, ch), (40, 44, 52, 255))
             d = ImageDraw.Draw(placeholder)
-            d.line([(0, 0), (cw - 1, ch - 1)], fill=(160, 165, 175, 200), width=2)
-            d.line([(cw - 1, 0), (0, ch - 1)], fill=(160, 165, 175, 200), width=2)
-            d.rectangle([0, 0, cw - 1, ch - 1], outline=(140, 145, 155), width=2)
+            d.line([(0, 0), (cw - 1, ch - 1)], fill=(70, 75, 85, 200), width=2)
+            d.line([(cw - 1, 0), (0, ch - 1)], fill=(70, 75, 85, 200), width=2)
+            d.rectangle([0, 0, cw - 1, ch - 1], outline=(90, 95, 105), width=2)
 
-            icon_r = min(cw // 2, ch // 2, 24)
+            icon_r = min(cw // 2, ch // 2, 22)
             cx_i, cy_i = cw // 2, ch // 2
-            d.line([(cx_i - icon_r, cy_i), (cx_i + icon_r, cy_i)], fill=(80, 85, 100), width=3)
-            d.line([(cx_i, cy_i - icon_r), (cx_i, cy_i + icon_r)], fill=(80, 85, 100), width=3)
+            d.line([(cx_i - icon_r, cy_i), (cx_i + icon_r, cy_i)], fill=(160, 165, 175), width=3)
+            d.line([(cx_i, cy_i - icon_r), (cx_i, cy_i + icon_r)], fill=(160, 165, 175), width=3)
 
-            if cw > 100 and ch > 50:
-                try:
-                    fnt_path = os.path.join("C:\\Windows\\Fonts", "segoeui.ttf")
-                    fnt = ImageFont.truetype(fnt_path, 13) if os.path.exists(fnt_path) else ImageFont.load_default()
-                    label = "Click slot to add image"
-                    bbox = d.textbbox((0, 0), label, font=fnt)
-                    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                    d.text((cx_i - tw // 2, cy_i + icon_r + 6), label, fill=(80, 85, 100), font=fnt)
-                except Exception:
-                    pass
-
-            if is_selected:
+            if is_selected and draw_selection:
                 d.rectangle([0, 0, cw - 1, ch - 1], outline=(0, 229, 255), width=4)
 
             canvas_img.paste(placeholder, (x1, y1), placeholder)
@@ -114,6 +105,35 @@ class CollageCell:
 
         # Prepare transformed copy of cell image
         img = self.image.convert("RGBA")
+
+        # 1. Photo Adjustments (Brightness & Contrast)
+        if self.brightness != 0:
+            b_factor = max(0.0, 1.0 + self.brightness / 100.0)
+            img = ImageEnhance.Brightness(img).enhance(b_factor)
+        if self.contrast != 0:
+            c_factor = max(0.0, 1.0 + self.contrast / 100.0)
+            img = ImageEnhance.Contrast(img).enhance(c_factor)
+
+        # 2. Filters
+        if self.filter_type == "Grayscale":
+            gray = ImageOps.grayscale(img).convert("RGBA")
+            img = gray
+        elif self.filter_type == "Sepia":
+            gray = ImageOps.grayscale(img)
+            sepia = ImageOps.colorize(gray, "#2E1F0F", "#F5E0C3").convert("RGBA")
+            img = sepia
+        elif self.filter_type == "Vivid":
+            img = ImageEnhance.Color(img).enhance(1.8)
+        elif self.filter_type == "Cool":
+            r, g, b, a = img.split()
+            b = b.point(lambda i: min(255, int(i * 1.25)))
+            img = Image.merge("RGBA", (r, g, b, a))
+        elif self.filter_type == "Warm":
+            r, g, b, a = img.split()
+            r = r.point(lambda i: min(255, int(i * 1.25)))
+            img = Image.merge("RGBA", (r, g, b, a))
+
+        # 3. Rotation & Mirroring
         if self.rotation:
             img = img.rotate(-self.rotation, expand=True)
         if self.flip_h:
@@ -125,36 +145,49 @@ class CollageCell:
         if iw == 0 or ih == 0:
             return
 
+        cell_tile = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+
         if self.fit == "stretch":
-            img = img.resize((cw, ch), Image.LANCZOS)
-            canvas_img.paste(img, (x1, y1), img)
+            cell_tile = img.resize((cw, ch), Image.LANCZOS)
 
         elif self.fit == "contain":
             scale = min(cw / iw, ch / ih)
             nw_i = max(1, int(iw * scale))
             nh_i = max(1, int(ih * scale))
-            img = img.resize((nw_i, nh_i), Image.LANCZOS)
+            img_r = img.resize((nw_i, nh_i), Image.LANCZOS)
             extra_w = max(0, cw - nw_i)
             extra_h = max(0, ch - nh_i)
-            px = x1 + int(extra_w * self.pan_x)
-            py = y1 + int(extra_h * self.pan_y)
-            canvas_img.paste(img, (px, py), img)
+            px = int(extra_w * self.pan_x)
+            py = int(extra_h * self.pan_y)
+            cell_tile.paste(img_r, (px, py), img_r)
 
         else:  # cover (default)
             scale = max(cw / iw, ch / ih)
             nw_i = max(1, int(iw * scale))
             nh_i = max(1, int(ih * scale))
-            img = img.resize((nw_i, nh_i), Image.LANCZOS)
+            img_r = img.resize((nw_i, nh_i), Image.LANCZOS)
             extra_w = max(0, nw_i - cw)
             extra_h = max(0, nh_i - ch)
             crop_x = int(extra_w * self.pan_x)
             crop_y = int(extra_h * self.pan_y)
-            img = img.crop((crop_x, crop_y, crop_x + cw, crop_y + ch))
-            canvas_img.paste(img, (x1, y1), img)
+            cell_tile = img_r.crop((crop_x, crop_y, crop_x + cw, crop_y + ch))
 
-        if is_selected:
+        # 4. Corner Radius Masking
+        if corner_radius > 0:
+            mask = Image.new("L", (cw, ch), 0)
+            d_mask = ImageDraw.Draw(mask)
+            d_mask.rounded_rectangle([0, 0, cw - 1, ch - 1], radius=corner_radius, fill=255)
+            canvas_img.paste(cell_tile, (x1, y1), mask)
+        else:
+            canvas_img.paste(cell_tile, (x1, y1), cell_tile)
+
+        # Draw selection highlight (ONLY when draw_selection is True!)
+        if is_selected and draw_selection:
             d_sel = ImageDraw.Draw(canvas_img)
-            d_sel.rectangle([x1, y1, x2 - 1, y2 - 1], outline=(0, 229, 255), width=4)
+            if corner_radius > 0:
+                d_sel.rounded_rectangle([x1, y1, x2 - 1, y2 - 1], radius=corner_radius, outline=(0, 229, 255), width=4)
+            else:
+                d_sel.rectangle([x1, y1, x2 - 1, y2 - 1], outline=(0, 229, 255), width=4)
 
 
 class CollageEditorDialog(QDialog):
@@ -166,9 +199,11 @@ class CollageEditorDialog(QDialog):
         self.tc = theme_colors
         self.initial_image = initial_image
         self.result_callback = result_callback
+        self.root_window = root_window
 
         self.current_template = "1 x 2"
         self.gap_val = 8
+        self.corner_radius_val = 6
         self.out_w_val = DEFAULT_OUT_W
         self.out_h_val = DEFAULT_OUT_H
         self.bg_color_val = "#18191A" if self.tc.get("theme_name") == "dark" else "#EFEFEF"
@@ -176,7 +211,7 @@ class CollageEditorDialog(QDialog):
         self.cells = []
         self.selected_idx = None
 
-        self.resize(1120, 720)
+        self.resize(1140, 740)
         self.setup_ui()
         self.apply_template(self.current_template)
 
@@ -202,13 +237,23 @@ class CollageEditorDialog(QDialog):
 
         top_bar.addWidget(QLabel("Gap:"))
         self.lbl_gap_val = QLabel(f"{self.gap_val} px")
-        self.lbl_gap_val.setFixedWidth(40)
+        self.lbl_gap_val.setFixedWidth(36)
         self.slider_gap = QSlider(Qt.Orientation.Horizontal)
         self.slider_gap.setRange(0, 32)
         self.slider_gap.setValue(self.gap_val)
         self.slider_gap.valueChanged.connect(self.on_gap_changed)
         top_bar.addWidget(self.slider_gap)
         top_bar.addWidget(self.lbl_gap_val)
+
+        top_bar.addWidget(QLabel("Corners:"))
+        self.lbl_corner_val = QLabel(f"{self.corner_radius_val} px")
+        self.lbl_corner_val.setFixedWidth(36)
+        self.slider_corner = QSlider(Qt.Orientation.Horizontal)
+        self.slider_corner.setRange(0, 30)
+        self.slider_corner.setValue(self.corner_radius_val)
+        self.slider_corner.valueChanged.connect(self.on_corner_changed)
+        top_bar.addWidget(self.slider_corner)
+        top_bar.addWidget(self.lbl_corner_val)
 
         top_bar.addWidget(QLabel("Width:"))
         self.spin_w = QSpinBox()
@@ -252,10 +297,10 @@ class CollageEditorDialog(QDialog):
 
         # Right: Selected Cell Customization Side Panel
         self.panel_cell_opts = QGroupBox("Selected Cell Properties")
-        self.panel_cell_opts.setFixedWidth(300)
+        self.panel_cell_opts.setFixedWidth(310)
         cell_layout = QVBoxLayout(self.panel_cell_opts)
 
-        self.lbl_cell_hint = QLabel("Select a cell slot in the preview canvas to edit image positioning, rotation, mirror, or capture a screen area.")
+        self.lbl_cell_hint = QLabel("Select a cell slot in the preview canvas to edit image positioning, filters, adjustments, or capture a screen area.")
         self.lbl_cell_hint.setWordWrap(True)
         self.lbl_cell_hint.setStyleSheet("color: #888888; font-style: italic;")
         cell_layout.addWidget(self.lbl_cell_hint)
@@ -289,7 +334,45 @@ class CollageEditorDialog(QDialog):
 
         opts_layout.addWidget(act_box)
 
-        # 2. Fit Mode & Orientation
+        # 2. Photo Adjustments & Filters
+        filter_box = QGroupBox("Photo Adjustments & Filter")
+        filter_layout = QVBoxLayout(filter_box)
+
+        f_lay = QHBoxLayout()
+        f_lay.addWidget(QLabel("Filter:"))
+        self.cb_filter = QComboBox()
+        self.cb_filter.addItems(["Original", "Grayscale", "Sepia", "Vivid", "Cool", "Warm"])
+        self.cb_filter.currentTextChanged.connect(self.on_filter_changed)
+        f_lay.addWidget(self.cb_filter)
+        filter_layout.addLayout(f_lay)
+
+        b_lay = QHBoxLayout()
+        b_lay.addWidget(QLabel("Brightness:"))
+        self.lbl_bright_val = QLabel("0")
+        self.lbl_bright_val.setFixedWidth(30)
+        self.slider_bright = QSlider(Qt.Orientation.Horizontal)
+        self.slider_bright.setRange(-100, 100)
+        self.slider_bright.setValue(0)
+        self.slider_bright.valueChanged.connect(self.on_brightness_changed)
+        b_lay.addWidget(self.slider_bright)
+        b_lay.addWidget(self.lbl_bright_val)
+        filter_layout.addLayout(b_lay)
+
+        c_lay = QHBoxLayout()
+        c_lay.addWidget(QLabel("Contrast:"))
+        self.lbl_contrast_val = QLabel("0")
+        self.lbl_contrast_val.setFixedWidth(30)
+        self.slider_contrast = QSlider(Qt.Orientation.Horizontal)
+        self.slider_contrast.setRange(-100, 100)
+        self.slider_contrast.setValue(0)
+        self.slider_contrast.valueChanged.connect(self.on_contrast_changed)
+        c_lay.addWidget(self.slider_contrast)
+        c_lay.addWidget(self.lbl_contrast_val)
+        filter_layout.addLayout(c_lay)
+
+        opts_layout.addWidget(filter_box)
+
+        # 3. Fit Mode & Orientation
         orient_box = QGroupBox("Fit & Orientation")
         orient_layout = QVBoxLayout(orient_box)
 
@@ -309,132 +392,98 @@ class CollageEditorDialog(QDialog):
         rot_layout.addWidget(self.cb_rot)
         orient_layout.addLayout(rot_layout)
 
-        self.chk_flip_h = QCheckBox("Flip Horizontal (Mirror)")
+        mirror_layout = QHBoxLayout()
+        self.chk_flip_h = QCheckBox("Flip H")
         self.chk_flip_h.stateChanged.connect(self.on_cell_property_changed)
-        orient_layout.addWidget(self.chk_flip_h)
-
-        self.chk_flip_v = QCheckBox("Flip Vertical")
+        self.chk_flip_v = QCheckBox("Flip V")
         self.chk_flip_v.stateChanged.connect(self.on_cell_property_changed)
-        orient_layout.addWidget(self.chk_flip_v)
+        mirror_layout.addWidget(self.chk_flip_h)
+        mirror_layout.addWidget(self.chk_flip_v)
+        orient_layout.addLayout(mirror_layout)
 
         opts_layout.addWidget(orient_box)
 
-        # 3. Panning & Positioning Sliders
-        pan_box = QGroupBox("Image Panning / Alignment")
+        # 4. Pan Sliders
+        pan_box = QGroupBox("Image Panning")
         pan_layout = QVBoxLayout(pan_box)
 
-        # Pan X
-        pan_x_hdr = QHBoxLayout()
-        pan_x_hdr.addWidget(QLabel("Pan X:"))
-        self.lbl_pan_x_val = QLabel("Center (50%)")
-        self.lbl_pan_x_val.setStyleSheet("font-weight: bold;")
-        pan_x_hdr.addWidget(self.lbl_pan_x_val)
-        pan_layout.addLayout(pan_x_hdr)
-
+        pan_x_layout = QHBoxLayout()
+        pan_x_layout.addWidget(QLabel("Pan X:"))
         self.slider_pan_x = QSlider(Qt.Orientation.Horizontal)
         self.slider_pan_x.setRange(0, 100)
         self.slider_pan_x.setValue(50)
         self.slider_pan_x.valueChanged.connect(self.on_cell_property_changed)
-        pan_layout.addWidget(self.slider_pan_x)
+        pan_x_layout.addWidget(self.slider_pan_x)
+        pan_layout.addLayout(pan_x_layout)
 
-        # Quick X Presets
-        x_presets = QHBoxLayout()
-        btn_px_l = QPushButton("Left")
-        btn_px_l.clicked.connect(lambda: self.slider_pan_x.setValue(0))
-        x_presets.addWidget(btn_px_l)
-        btn_px_c = QPushButton("Center")
-        btn_px_c.clicked.connect(lambda: self.slider_pan_x.setValue(50))
-        x_presets.addWidget(btn_px_c)
-        btn_px_r = QPushButton("Right")
-        btn_px_r.clicked.connect(lambda: self.slider_pan_x.setValue(100))
-        x_presets.addWidget(btn_px_r)
-        pan_layout.addLayout(x_presets)
-
-        # Pan Y
-        pan_y_hdr = QHBoxLayout()
-        pan_y_hdr.addWidget(QLabel("Pan Y:"))
-        self.lbl_pan_y_val = QLabel("Top (0%)")
-        self.lbl_pan_y_val.setStyleSheet("font-weight: bold;")
-        pan_y_hdr.addWidget(self.lbl_pan_y_val)
-        pan_layout.addLayout(pan_y_hdr)
-
+        pan_y_layout = QHBoxLayout()
+        pan_y_layout.addWidget(QLabel("Pan Y:"))
         self.slider_pan_y = QSlider(Qt.Orientation.Horizontal)
         self.slider_pan_y.setRange(0, 100)
-        self.slider_pan_y.setValue(0)
+        self.slider_pan_y.setValue(50)
         self.slider_pan_y.valueChanged.connect(self.on_cell_property_changed)
-        pan_layout.addWidget(self.slider_pan_y)
-
-        # Quick Y Presets
-        y_presets = QHBoxLayout()
-        btn_py_t = QPushButton("Top")
-        btn_py_t.clicked.connect(lambda: self.slider_pan_y.setValue(0))
-        y_presets.addWidget(btn_py_t)
-        btn_py_c = QPushButton("Center")
-        btn_py_c.clicked.connect(lambda: self.slider_pan_y.setValue(50))
-        y_presets.addWidget(btn_py_c)
-        btn_py_b = QPushButton("Bottom")
-        btn_py_b.clicked.connect(lambda: self.slider_pan_y.setValue(100))
-        y_presets.addWidget(btn_py_b)
-        pan_layout.addLayout(y_presets)
+        pan_y_layout.addWidget(self.slider_pan_y)
+        pan_layout.addLayout(pan_y_layout)
 
         opts_layout.addWidget(pan_box)
+
         cell_layout.addWidget(self.opts_container)
-        self.opts_container.hide()
+        self.opts_container.setVisible(False)
+        cell_layout.addStretch()
 
         workspace_splitter.addWidget(self.panel_cell_opts)
-        workspace_splitter.setStretchFactor(0, 3)
-        workspace_splitter.setStretchFactor(1, 1)
-
-        main_layout.addWidget(workspace_splitter, 1)
+        workspace_splitter.setSizes([800, 310])
+        main_layout.addWidget(workspace_splitter)
 
         # -------------------------------------------------------------------
-        # BOTTOM ACTION BAR
+        # BOTTOM DIALOG ACTIONS
         # -------------------------------------------------------------------
         bottom_bar = QHBoxLayout()
 
-        btn_save_as = QPushButton("💾 Export Collage File...")
-        btn_save_as.clicked.connect(self.save_as_file)
-        bottom_bar.addWidget(btn_save_as)
+        btn_send_canvas = QPushButton("✓ Send to Canvas Editor")
+        btn_send_canvas.setStyleSheet("background-color: #005FB8; color: white; font-weight: bold; padding: 6px 12px; border-radius: 4px;")
+        btn_send_canvas.clicked.connect(self.send_to_canvas)
+        bottom_bar.addWidget(btn_send_canvas)
+
+        btn_save = QPushButton("💾 Export to File")
+        btn_save.clicked.connect(self.export_file)
+        bottom_bar.addWidget(btn_save)
+
+        btn_copy = QPushButton("📋 Copy to Clipboard")
+        btn_copy.clicked.connect(self.copy_to_clipboard)
+        bottom_bar.addWidget(btn_copy)
 
         bottom_bar.addStretch()
 
-        btn_apply = QPushButton("✓ Add Collage to Workspace Editor")
-        btn_apply.setStyleSheet("background-color: #005FB8; color: white; font-weight: bold; padding: 6px 16px;")
-        btn_apply.clicked.connect(self.export_to_editor)
-        bottom_bar.addWidget(btn_apply)
-
-        btn_cancel = QPushButton("Cancel")
-        btn_cancel.clicked.connect(self.reject)
-        bottom_bar.addWidget(btn_cancel)
+        btn_close = QPushButton("Cancel")
+        btn_close.clicked.connect(self.reject)
+        bottom_bar.addWidget(btn_close)
 
         main_layout.addLayout(bottom_bar)
 
-    def apply_template(self, name):
-        self.current_template = name
-        rects = TEMPLATES.get(name, TEMPLATES["1 x 2"])
-        old_imgs = [c.image for c in self.cells]
+    def apply_template(self, template_name):
+        self.current_template = template_name
+        coords = TEMPLATES.get(template_name, TEMPLATES["1 x 2"])
 
-        self.cells = [CollageCell(nx, ny, nw, nh) for nx, ny, nw, nh in rects]
-        for i, img in enumerate(old_imgs):
+        old_images = [cell.image for cell in self.cells if cell.image is not None]
+        self.cells = [CollageCell(nx, ny, nw, nh) for nx, ny, nw, nh in coords]
+
+        for i, img in enumerate(old_images):
             if i < len(self.cells):
                 self.cells[i].image = img
 
-        if self.selected_idx is not None and self.selected_idx >= len(self.cells):
-            self.selected_idx = 0 if self.cells else None
-
+        self.selected_idx = 0 if self.cells else None
         self.update_cell_panel()
         self.update_preview()
-
-    def choose_bg_color(self):
-        col = QColorDialog.getColor(QColor(self.bg_color_val), self, "Choose Background Color")
-        if col.isValid():
-            self.bg_color_val = col.name()
-            self.btn_bg_color.setStyleSheet(f"background-color: {self.bg_color_val}; border: 1px solid #777777; border-radius: 4px;")
-            self.update_preview()
 
     def on_gap_changed(self, val):
         self.gap_val = val
         self.lbl_gap_val.setText(f"{val} px")
+        self.update_preview()
+
+    def on_corner_changed(self, val):
+        self.corner_radius_val = val
+        self.lbl_corner_val.setText(f"{val} px")
         self.update_preview()
 
     def on_size_changed(self):
@@ -442,216 +491,208 @@ class CollageEditorDialog(QDialog):
         self.out_h_val = self.spin_h.value()
         self.update_preview()
 
-    def render_composite(self):
-        w, h = self.out_w_val, self.out_h_val
-        canvas = Image.new("RGBA", (w, h), QColor(self.bg_color_val).getRgb())
-        for idx, cell in enumerate(self.cells):
-            is_sel = (idx == self.selected_idx)
-            cell.render_into(canvas, w, h, self.gap_val, is_selected=is_sel)
-        return canvas
-
-    def update_preview(self):
-        canvas = self.render_composite()
-        pixmap = pil_to_qpixmap(canvas)
-
-        avail_w = max(300, self.lbl_preview.width() - 10)
-        avail_h = max(200, self.lbl_preview.height() - 10)
-        scaled_pixmap = pixmap.scaled(QSize(avail_w, avail_h), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        self.lbl_preview.setPixmap(scaled_pixmap)
-
-        filled = sum(1 for c in self.cells if c.image is not None)
-        self.lbl_fill_info.setText(f"{filled} / {len(self.cells)} filled")
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update_preview()
+    def choose_bg_color(self):
+        col = QColorDialog.getColor(QColor(self.bg_color_val), self, "Select Collage Background Color")
+        if col.isValid():
+            self.bg_color_val = col.name()
+            self.btn_bg_color.setStyleSheet(f"background-color: {self.bg_color_val}; border: 1px solid #777777; border-radius: 4px;")
+            self.update_preview()
 
     def on_preview_clicked(self, event):
-        if not self.cells or not self.lbl_preview.pixmap():
+        pos = event.position().toPoint()
+        lbl_w = self.lbl_preview.width()
+        lbl_h = self.lbl_preview.height()
+
+        pix = self.lbl_preview.pixmap()
+        if not pix or pix.isNull():
             return
 
-        pos = event.position().toPoint()
-        pm = self.lbl_preview.pixmap()
-        lbl_w, lbl_h = self.lbl_preview.width(), self.lbl_preview.height()
-        pm_w, pm_h = pm.width(), pm.height()
+        pw = pix.width()
+        ph = pix.height()
+        off_x = (lbl_w - pw) // 2
+        off_y = (lbl_h - ph) // 2
 
-        off_x = (lbl_w - pm_w) // 2
-        off_y = (lbl_h - pm_h) // 2
+        click_x = pos.x() - off_x
+        click_y = pos.y() - off_y
+        if click_x < 0 or click_y < 0 or click_x >= pw or click_y >= ph:
+            return
 
-        rel_x = pos.x() - off_x
-        rel_y = pos.y() - off_y
+        norm_x = click_x / float(pw)
+        norm_y = click_y / float(ph)
 
-        if 0 <= rel_x <= pm_w and 0 <= rel_y <= pm_h:
-            nx = rel_x / float(pm_w)
-            ny = rel_y / float(pm_h)
-            found = False
-            for idx, c in enumerate(self.cells):
-                if c.nx <= nx <= c.nx + c.nw and c.ny <= ny <= c.ny + c.nh:
-                    self.selected_idx = idx
-                    found = True
-                    break
-            if not found:
-                self.selected_idx = None
-        else:
-            self.selected_idx = None
-
-        self.update_cell_panel()
-        self.update_preview()
+        for idx, cell in enumerate(self.cells):
+            if cell.nx <= norm_x <= (cell.nx + cell.nw) and cell.ny <= norm_y <= (cell.ny + cell.nh):
+                self.selected_idx = idx
+                self.update_cell_panel()
+                self.update_preview()
+                break
 
     def update_cell_panel(self):
+        if self.selected_idx is None or self.selected_idx >= len(self.cells):
+            self.opts_container.setVisible(False)
+            self.lbl_cell_hint.setVisible(True)
+            self.panel_cell_opts.setTitle("Selected Cell Properties")
+            return
+
+        cell = self.cells[self.selected_idx]
+        self.opts_container.setVisible(True)
+        self.lbl_cell_hint.setVisible(False)
+        self.panel_cell_opts.setTitle(f"Selected Cell #{self.selected_idx + 1} Properties")
+
+        self.cb_fit.blockSignals(True)
+        self.cb_rot.blockSignals(True)
+        self.chk_flip_h.blockSignals(True)
+        self.chk_flip_v.blockSignals(True)
+        self.slider_pan_x.blockSignals(True)
+        self.slider_pan_y.blockSignals(True)
+        self.cb_filter.blockSignals(True)
+        self.slider_bright.blockSignals(True)
+        self.slider_contrast.blockSignals(True)
+
+        self.cb_fit.setCurrentText(cell.fit)
+        rot_str = f"{cell.rotation}°"
+        self.cb_rot.setCurrentText(rot_str if rot_str in ["0°", "90°", "180°", "270°"] else "0°")
+        self.chk_flip_h.setChecked(cell.flip_h)
+        self.chk_flip_v.setChecked(cell.flip_v)
+        self.slider_pan_x.setValue(int(cell.pan_x * 100))
+        self.slider_pan_y.setValue(int(cell.pan_y * 100))
+
+        self.cb_filter.setCurrentText(cell.filter_type)
+        self.slider_bright.setValue(cell.brightness)
+        self.lbl_bright_val.setText(str(cell.brightness))
+        self.slider_contrast.setValue(cell.contrast)
+        self.lbl_contrast_val.setText(str(cell.contrast))
+
+        self.cb_fit.blockSignals(False)
+        self.cb_rot.blockSignals(False)
+        self.chk_flip_h.blockSignals(False)
+        self.chk_flip_v.blockSignals(False)
+        self.slider_pan_x.blockSignals(False)
+        self.slider_pan_y.blockSignals(False)
+        self.cb_filter.blockSignals(False)
+        self.slider_bright.blockSignals(False)
+        self.slider_contrast.blockSignals(False)
+
+    def on_filter_changed(self, text):
         if self.selected_idx is not None and self.selected_idx < len(self.cells):
-            cell = self.cells[self.selected_idx]
-            self.lbl_cell_hint.hide()
-            self.opts_container.show()
+            self.cells[self.selected_idx].filter_type = text
+            self.update_preview()
 
-            self.cb_fit.blockSignals(True)
-            self.cb_rot.blockSignals(True)
-            self.chk_flip_h.blockSignals(True)
-            self.chk_flip_v.blockSignals(True)
-            self.slider_pan_x.blockSignals(True)
-            self.slider_pan_y.blockSignals(True)
+    def on_brightness_changed(self, val):
+        if self.selected_idx is not None and self.selected_idx < len(self.cells):
+            self.cells[self.selected_idx].brightness = val
+            self.lbl_bright_val.setText(str(val))
+            self.update_preview()
 
-            self.cb_fit.setCurrentText(cell.fit)
-            self.cb_rot.setCurrentText(f"{cell.rotation}°")
-            self.chk_flip_h.setChecked(cell.flip_h)
-            self.chk_flip_v.setChecked(cell.flip_v)
-            self.slider_pan_x.setValue(int(cell.pan_x * 100))
-            self.slider_pan_y.setValue(int(cell.pan_y * 100))
-
-            self.cb_fit.blockSignals(False)
-            self.cb_rot.blockSignals(False)
-            self.chk_flip_h.blockSignals(False)
-            self.chk_flip_v.blockSignals(False)
-            self.slider_pan_x.blockSignals(False)
-            self.slider_pan_y.blockSignals(False)
-
-            self.update_pan_readout_labels()
-        else:
-            self.opts_container.hide()
-            self.lbl_cell_hint.show()
+    def on_contrast_changed(self, val):
+        if self.selected_idx is not None and self.selected_idx < len(self.cells):
+            self.cells[self.selected_idx].contrast = val
+            self.lbl_contrast_val.setText(str(val))
+            self.update_preview()
 
     def on_cell_property_changed(self):
         if self.selected_idx is None or self.selected_idx >= len(self.cells):
             return
-
         cell = self.cells[self.selected_idx]
         cell.fit = self.cb_fit.currentText()
-        rot_str = self.cb_rot.currentText().replace("°", "")
-        cell.rotation = int(rot_str)
+
+        rot_txt = self.cb_rot.currentText().replace("°", "")
+        try:
+            cell.rotation = int(rot_txt)
+        except ValueError:
+            cell.rotation = 0
+
         cell.flip_h = self.chk_flip_h.isChecked()
         cell.flip_v = self.chk_flip_v.isChecked()
         cell.pan_x = self.slider_pan_x.value() / 100.0
         cell.pan_y = self.slider_pan_y.value() / 100.0
 
-        self.update_pan_readout_labels()
         self.update_preview()
 
-    def update_pan_readout_labels(self):
-        px = self.slider_pan_x.value()
-        py = self.slider_pan_y.value()
-
-        if px == 0:
-            self.lbl_pan_x_val.setText("Left (0%)")
-        elif px == 50:
-            self.lbl_pan_x_val.setText("Center (50%)")
-        elif px == 100:
-            self.lbl_pan_x_val.setText("Right (100%)")
-        else:
-            self.lbl_pan_x_val.setText(f"{px}%")
-
-        if py == 0:
-            self.lbl_pan_y_val.setText("Top (0%)")
-        elif py == 50:
-            self.lbl_pan_y_val.setText("Center (50%)")
-        elif py == 100:
-            self.lbl_pan_y_val.setText("Bottom (100%)")
-        else:
-            self.lbl_pan_y_val.setText(f"{py}%")
-
     def load_image_for_selected(self):
-        target_idx = self.selected_idx
-        if target_idx is None:
-            # Pick first empty cell or cell 0
-            for i, c in enumerate(self.cells):
-                if c.image is None:
-                    target_idx = i
-                    break
-            if target_idx is None and self.cells:
-                target_idx = 0
-
-        if target_idx is None:
+        if self.selected_idx is None:
             return
-
         file_path, _ = QFileDialog.getOpenFileName(
-            self, f"Add Image to Cell {target_idx + 1}", "",
-            "Images (*.png *.jpg *.jpeg *.bmp *.webp *.tiff);;All Files (*.*)"
+            self, "Open Image for Slot", "", "Images (*.png *.jpg *.jpeg *.bmp *.webp)"
         )
-
         if file_path:
             try:
                 img = Image.open(file_path).convert("RGBA")
-                self.cells[target_idx].image = img
-                self.selected_idx = target_idx
-                self.update_cell_panel()
+                self.cells[self.selected_idx].image = img
                 self.update_preview()
             except Exception as e:
-                QMessageBox.critical(self, "Image Error", f"Could not open image:\n{e}")
+                QMessageBox.critical(self, "Error", f"Failed to load image:\n{e}")
 
     def snip_into_selected(self):
-        """Hides the dialog, runs screen capture overlay, then pastes captured snip into slot."""
-        target_idx = self.selected_idx if self.selected_idx is not None else 0
-        if target_idx >= len(self.cells):
+        if self.selected_idx is None:
             return
 
-        self.hide()
-        if self.parent():
-            self.parent().hide()
-
-        def on_snip_done(pil_image):
-            if self.parent():
-                self.parent().show()
-            self.show()
-            self.activateWindow()
-            self.raise_()
-
-            if pil_image:
-                self.cells[target_idx].image = pil_image.convert("RGBA")
-                self.selected_idx = target_idx
-                self.update_cell_panel()
+        def on_snip_complete(captured_img):
+            if captured_img:
+                self.cells[self.selected_idx].image = captured_img
                 self.update_preview()
 
-        # Launch CaptureOverlay
-        self.overlay = CaptureOverlay(self.parent(), mode="free", callback=on_snip_done)
+        self.snip_overlay = CaptureOverlay(self, mode="free", callback=on_snip_complete)
 
     def clear_selected_slot(self):
         if self.selected_idx is not None and self.selected_idx < len(self.cells):
             self.cells[self.selected_idx].image = None
-            self.update_cell_panel()
             self.update_preview()
 
-    def export_to_editor(self):
-        canvas = self.render_composite()
+    def get_baked_collage_image(self, draw_selection=False):
+        """Generates the full-res RGBA collage PIL Image without selection highlights."""
+        out_w = self.out_w_val
+        out_h = self.out_h_val
+        bg_col = QColor(self.bg_color_val)
+        bg_rgba = (bg_col.red(), bg_col.green(), bg_col.blue(), 255)
+
+        collage = Image.new("RGBA", (out_w, out_h), bg_rgba)
+        for idx, cell in enumerate(self.cells):
+            is_sel = (idx == self.selected_idx)
+            cell.render_into(collage, out_w, out_h, self.gap_val, is_selected=is_sel, corner_radius=self.corner_radius_val, draw_selection=draw_selection)
+        return collage
+
+    def update_preview(self):
+        # Render canvas preview image with selection border
+        collage = self.get_baked_collage_image(draw_selection=True)
+
+        filled_cnt = sum(1 for c in self.cells if c.image is not None)
+        self.lbl_fill_info.setText(f"{filled_cnt} / {len(self.cells)} slots filled")
+
+        pix = pil_to_qpixmap(collage)
+        lbl_w = max(400, self.lbl_preview.width() - 10)
+        lbl_h = max(300, self.lbl_preview.height() - 10)
+        scaled_pix = pix.scaled(lbl_w, lbl_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.lbl_preview.setPixmap(scaled_pix)
+
+    def send_to_canvas(self):
+        collage = self.get_baked_collage_image(draw_selection=False)
         if self.result_callback:
-            self.result_callback(canvas)
+            self.result_callback(collage)
+        elif self.root_window and hasattr(self.root_window, 'canvas_editor'):
+            self.root_window.canvas_editor.set_image(collage)
         self.accept()
 
-    def save_as_file(self):
-        canvas = self.render_composite()
+    def export_file(self):
+        collage = self.get_baked_collage_image(draw_selection=False)
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Collage As",
-            os.path.join(os.path.expanduser("~"), "Pictures", f"Collage_{time.strftime('%Y%m%d_%H%M%S')}.png"),
-            "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg);;BMP Image (*.bmp)"
+            self, "Export Collage Image", "Collage.png", "PNG Image (*.png);;JPEG Image (*.jpg)"
         )
-
         if file_path:
-            ext = os.path.splitext(file_path)[1].lower()
             try:
-                if ext in (".jpg", ".jpeg"):
-                    canvas.convert("RGB").save(file_path, "JPEG")
-                elif ext == ".bmp":
-                    canvas.convert("RGB").save(file_path, "BMP")
+                if file_path.lower().endswith(".jpg") or file_path.lower().endswith(".jpeg"):
+                    collage.convert("RGB").save(file_path, "JPEG", quality=95)
                 else:
-                    canvas.save(file_path, "PNG")
-                QMessageBox.information(self, "Collage Saved", f"Saved collage to:\n{file_path}")
+                    collage.save(file_path, "PNG")
+                QMessageBox.information(self, "Success", f"Collage exported successfully to:\n{file_path}")
             except Exception as e:
-                QMessageBox.critical(self, "Save Error", f"Failed to save collage:\n{e}")
+                QMessageBox.critical(self, "Error", f"Failed to save collage:\n{e}")
+
+    def copy_to_clipboard(self):
+        from PySide6.QtGui import QGuiApplication
+        collage = self.get_baked_collage_image(draw_selection=False)
+        pixmap = pil_to_qpixmap(collage)
+        cb = QGuiApplication.clipboard()
+        cb.setPixmap(pixmap)
+        cb.setImage(pixmap.toImage())
+        QMessageBox.information(self, "Copied", "Collage copied to clipboard!")

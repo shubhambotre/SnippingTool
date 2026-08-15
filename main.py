@@ -291,8 +291,10 @@ class SnippingToolApp(QMainWindow):
         # Divider
         toolbar_layout.addWidget(self.make_v_divider())
 
-        # --- MIDDLE GROUP: Vector Tools ---
-        mid_grp = QHBoxLayout()
+        # --- MIDDLE GROUP: Vector Tools (Hidden initially in Minimal Mode) ---
+        self.mid_tools_container = QWidget()
+        mid_grp = QHBoxLayout(self.mid_tools_container)
+        mid_grp.setContentsMargins(0, 0, 0, 0)
         mid_grp.setSpacing(3)
 
         tools = [
@@ -377,7 +379,8 @@ class SnippingToolApp(QMainWindow):
         btn_picker.clicked.connect(self.choose_custom_color)
         mid_grp.addWidget(btn_picker)
 
-        toolbar_layout.addLayout(mid_grp)
+        toolbar_layout.addWidget(self.mid_tools_container)
+        self.mid_tools_container.setVisible(False)
         toolbar_layout.addStretch()
 
         # --- RIGHT GROUP: Actions ---
@@ -497,6 +500,7 @@ class SnippingToolApp(QMainWindow):
 
     def on_capture_complete(self, pil_image):
         if pil_image:
+            self.mid_tools_container.setVisible(True)
             self.canvas_editor.set_image(pil_image)
             self.lbl_status_dims.setText(f"RESOLUTION: {pil_image.width} x {pil_image.height} PX")
             self.showMaximized()
@@ -680,7 +684,7 @@ class SnippingToolApp(QMainWindow):
             self.statusBar().showMessage(f"Saved snippet to {file_path}", 4000)
 
     def open_collage_editor(self):
-        dialog = CollageEditorDialog(self, theme_colors={"theme_name": self.config.get("theme")}, initial_image=self.canvas_editor.base_image, result_callback=self.on_capture_complete)
+        dialog = CollageEditorDialog(self, theme_colors={"theme_name": self.config.get("theme")}, initial_image=self.canvas_editor.base_image, result_callback=self.on_capture_complete, root_window=self)
         dialog.exec()
 
     def open_settings_dialog(self):
