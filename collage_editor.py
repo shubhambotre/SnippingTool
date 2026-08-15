@@ -627,12 +627,29 @@ class CollageEditorDialog(QDialog):
         if self.selected_idx is None:
             return
 
+        # Hide collage dialog and main application window to prevent shadow artifacts
+        self.setWindowOpacity(0.0)
+        self.hide()
+        if self.root_window:
+            self.root_window.setWindowOpacity(0.0)
+            self.root_window.hide()
+
         def on_snip_complete(captured_img):
+            if self.root_window:
+                self.root_window.setWindowOpacity(1.0)
+                self.root_window.show()
+
+            self.setWindowOpacity(1.0)
+            self.show()
+            self.activateWindow()
+            self.raise_()
+
             if captured_img:
                 self.cells[self.selected_idx].image = captured_img
                 self.update_preview()
 
-        self.snip_overlay = CaptureOverlay(self, mode="free", callback=on_snip_complete)
+        target_main = self.root_window if self.root_window else self
+        self.snip_overlay = CaptureOverlay(target_main, mode="free", callback=on_snip_complete)
 
     def clear_selected_slot(self):
         if self.selected_idx is not None and self.selected_idx < len(self.cells):
