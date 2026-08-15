@@ -639,6 +639,17 @@ class CanvasEditor(QGraphicsView):
 
         scene_pos = self.mapToScene(event.position().toPoint())
 
+        # Clean up any un-edited empty text items before processing mouse press
+        for item in list(self.scene.items()):
+            if isinstance(item, QGraphicsTextItem) and item != self.scene.focusItem():
+                if not item.toPlainText().strip():
+                    if item in self.history:
+                        self.history.remove(item)
+                    try:
+                        self.scene.removeItem(item)
+                    except RuntimeError:
+                        pass
+
         if event.button() == Qt.MouseButton.LeftButton:
             if self.tool == "select":
                 super().mousePressEvent(event)
@@ -679,7 +690,7 @@ class CanvasEditor(QGraphicsView):
                 self.current_item = self.scene.addEllipse(QRectF(scene_pos, scene_pos), pen, fill_brush)
 
             elif self.tool == "text":
-                text_item = QGraphicsTextItem("Double click to edit")
+                text_item = QGraphicsTextItem("")
                 font = QFont(self.font_family, self.font_size)
                 font.setBold(True)
                 text_item.setFont(font)
@@ -697,6 +708,7 @@ class CanvasEditor(QGraphicsView):
                     self.on_tool_change_callback("select")
                 self.scene.clearSelection()
                 text_item.setSelected(True)
+                text_item.setFocus()
 
                 if self.on_draw_callback:
                     self.on_draw_callback()
@@ -849,6 +861,11 @@ class CanvasEditor(QGraphicsView):
 
     def keyPressEvent(self, event):
         """Handles keyboard shortcuts (Delete, Backspace, Enter/Return crop confirm, Ctrl+A, Nudging, +/- Scaling)."""
+        focus_item = self.scene.focusItem()
+        if isinstance(focus_item, QGraphicsTextItem) and (focus_item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction):
+            super().keyPressEvent(event)
+            return
+
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and getattr(self, 'crop_overlay_item', None):
             try:
                 self.crop_overlay_item.apply_crop()
